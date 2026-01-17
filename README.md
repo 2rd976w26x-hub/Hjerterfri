@@ -1,4 +1,15 @@
-# Hjerterfri v1.1.2 (Online rum - demo)
+# Hjerterfri v1.1.3 (Online rum - demo)
+
+## Render / deploy note
+
+Hvis du deployer på Render, så er Node-versionen pinned til **20.12.2 (LTS)** for at undgå npm-fejlen
+"Exit handler never called!" som er rapporteret i CI-miljøer på visse nyere Node/npm-kombinationer.
+
+På Render kan du med fordel sætte **Build Command** til:
+
+```
+npm run render-build
+```
 
 Dette er en **github-ready** demo af **Hjerterfri** med:
 
