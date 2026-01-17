@@ -131,6 +131,23 @@ button.primary{
   max-width:92%;
   text-align:center;
 }
+
+/* Passing controls (bottom-left of the play board) */
+.passPanel{
+  position:absolute;
+  left:14px;
+  bottom:14px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px 12px;
+  border-radius:14px;
+  background:rgba(0,0,0,0.18);
+  border:1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(6px);
+  max-width:240px;
+}
+.passPanel .passInfo{ font-weight:800; font-size:0.95em; }
 .trick{
   position:relative;
   width:300px;
@@ -257,6 +274,20 @@ button.primary{
   --hand-card-w: 78px;
   --hand-card-h: 108px;
   gap: var(--hand-gap);
+}
+
+/* Mobile: show the hand in 2 rows if needed (no horizontal scroll) */
+@media (max-width:800px){
+  body{ overflow-x:hidden; }
+  .hand{
+    flex-wrap:wrap;
+    justify-content:center;
+    align-items:center;
+    padding:10px 0 6px;
+    --hand-card-w: 52px;
+    --hand-card-h: 74px;
+    --hand-gap: 8px;
+  }
 }
 
 /* ===== Playing card layout (copied from Piratwhist) ===== */

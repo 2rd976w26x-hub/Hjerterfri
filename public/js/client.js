@@ -1,5 +1,5 @@
 /*
-  Hjerterfri v1.3.6
+  Hjerterfri v1.3.9
   - Online rum (Socket.IO)
   - Fulde grundregler for Hjerterfri (tricks/point/2♣ starter/hearts broken)
   - Passerunde (3 kort) med cyklus: venstre, højre, overfor, ingen (repeat)
@@ -34,6 +34,7 @@ const elScores = document.getElementById('scoreRows');
 let myRoom = null;
 let mySeatIndex = null;
 let isHost = false;
+let myName = '';
 let publicState = null; // room public state
 let privateState = null; // per-player state (hand, legal moves, etc.)
 
@@ -198,6 +199,7 @@ function passDirLabel(passDir){
     case 'left': return 'Venstre';
     case 'right': return 'Højre';
     case 'across': return 'Overfor';
+    case 'clockwise': return 'Med uret';
     case 'none': return 'Ingen';
     default: return '—';
   }
@@ -213,6 +215,16 @@ function updateSuitCounter(playedSuitCounts, show){
   elSuitRows.innerHTML = ['♣','♦','♥','♠'].map(s =>
     `<div class="counterRow"><div>${s} ${suitNames[s]}</div><div class="badge">${playedSuitCounts[s] ?? 0}/13</div></div>`
   ).join('');
+}
+
+function shouldShowSuitCounter(){
+  // Requirement: "kort spillet pr. kulør" must ONLY be visible if the local player's name contains "Jim".
+  // No "first round" or "starter" logic.
+  const seatName = (publicState?.seats && Number.isFinite(mySeatIndex))
+    ? (publicState.seats[mySeatIndex]?.name || '')
+    : '';
+  const n = (seatName || myName || '').trim();
+  return n.includes('Jim');
 }
 
 function setTurnGlow(turnIndex){
@@ -361,8 +373,8 @@ function renderHand(){
   if (!privateState?.hand) return;
 
   // Sort hand by suit then value (tidy hand).
-  // Suit order: ♣ ♦ ♥ ♠
-  const suitOrder = { '♣': 0, '♦': 1, '♥': 2, '♠': 3 };
+  // Suit order requested: ♣ ♦ ♠ ♥
+  const suitOrder = { '♣': 0, '♦': 1, '♠': 2, '♥': 3 };
   const rankOrder = {
     '2': 2,  '3': 3,  '4': 4,  '5': 5,  '6': 6,  '7': 7,
     '8': 8,  '9': 9,  '10': 10,
@@ -374,13 +386,21 @@ function renderHand(){
     if (sa !== sb) return sa - sb;
     const ra = rankOrder[a.value] ?? 99;
     const rb = rankOrder[b.value] ?? 99;
-    return ra - rb;
+    // Value order requested: A ... 2 (descending)
+    return rb - ra;
   });
 
   // Desktop hand should NOT be compact/overlapping.
   // Instead, scale card size + gap so ALL cards fit across the available width.
   // This matches the "fills the full width" feel from Piratwhist.
   try {
+    // On mobile we allow wrapping into 2 rows; do NOT force single-row sizing.
+    if (window.matchMedia && window.matchMedia('(max-width: 800px)').matches) {
+      elHand.style.removeProperty('--hand-card-w');
+      elHand.style.removeProperty('--hand-card-h');
+      elHand.style.removeProperty('--hand-gap');
+      return;
+    }
     const n = privateState.hand.length;
     const wrap = elHand.closest('.handWrap');
     const containerW = (wrap?.clientWidth || elHand.clientWidth || 0);
@@ -609,10 +629,9 @@ socket.on('game:cardPlayed', (e) => {
     setTimeout(() => flipCardUp(el), 520);
   }
 
-  // Keep suit counter fresh for starter
-  if (e.playedSuitCounts && publicState && publicState.started) {
-    const starterIsMe = (publicState.startingSeatIndex === mySeatIndex);
-    updateSuitCounter(e.playedSuitCounts, starterIsMe);
+  // Suit counter visibility: ONLY if local player's name contains "Jim".
+  if (e.playedSuitCounts) {
+    updateSuitCounter(e.playedSuitCounts, shouldShowSuitCounter());
   }
 });
 
@@ -672,12 +691,14 @@ socket.on('game:info', (e) => {
 elBtnCreate.addEventListener('click', () => {
   const name = document.getElementById('nameCreate').value.trim() || 'Host';
   const cpuCount = Number(document.getElementById('cpuCount').value);
+  myName = name;
   socket.emit('room:create', { name, cpuCount });
 });
 
 elBtnJoin.addEventListener('click', () => {
   const name = document.getElementById('nameJoin').value.trim() || 'Spiller';
   const code = document.getElementById('roomCode').value.trim();
+  myName = name;
   socket.emit('room:join', { name, code });
 });
 
@@ -686,6 +707,7 @@ elBtnLeave.addEventListener('click', () => {
   myRoom = null;
   mySeatIndex = null;
   isHost = false;
+  myName = '';
   publicState = null;
   privateState = null;
   selectedPass = new Set();

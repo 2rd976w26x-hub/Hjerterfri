@@ -1,4 +1,4 @@
-# Hjerterfri v1.3.6 (Online rum)
+# Hjerterfri v1.3.9 (Online rum)
 
 Denne version er en **spilbar online** udgave af **Hjerterfri** med:
 
@@ -12,7 +12,7 @@ Denne version er en **spilbar online** udgave af **Hjerterfri** med:
   - **Første stik**: der ledes 2♣, og der må ikke smides pointkort (♥ eller ♠Q), medmindre man ikke kan andet
   - **Point**: ♥ = 1 pr. kort, ♠Q = 13
   - **Shoot the moon**: hvis en spiller tager alle 26 point i en runde, får de andre 26 og spilleren 0
-- **Kulør-tæller** (♣♦♥♠ spillet) vises kun for **starteren** (den der har 2♣)
+- **Kulør-tæller** (♣♦♥♠ spillet) vises kun hvis **dit spillernavn indeholder "Jim"**
 
 > Note: Der findes mange varianter af Hjerterfri. Denne version følger en almindelig standard-variant.
 
@@ -20,7 +20,11 @@ Denne version er en **spilbar online** udgave af **Hjerterfri** med:
 
 Node-versionen er pinned til **20.12.2 (LTS)** og der er tilføjet `.npmrc`, så deploy på Render ikke forsøger at hente pakker via interne registries.
 
-## Nyt i v1.3.6
+## Nyt i v1.3.9
+
+- Hånden sorterer nu pr. kulør (Klør, Ruder, Spar, Hjerter) og derefter i styrke **A → 2**.
+
+- Kulør-tæller vises kun hvis dit spillernavn indeholder "Jim" (ingen "starter"-logik)
 
 - Kortlayout matcher Piratwhist: rigtige farver (rød for ♥/♦) og SVG pips/face-cards.
 

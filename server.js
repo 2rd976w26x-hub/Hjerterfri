@@ -1,6 +1,6 @@
 'use strict';
 
-// Hjerterfri v1.3.6
+// Hjerterfri v1.3.9
 // Online rum (Socket.IO) + fulde grundregler for Hjerterfri (tricks, point, 2♣ starter, hearts broken)
 // + simpel CPU-AI + public/private state.
 
@@ -112,12 +112,12 @@ function findTwoOfClubsSeat(hands) {
 }
 
 function passDirectionForRound(round) {
-  // standard cycle: left, right, across, none
-  const r = round % 4;
-  if (r === 1) return 'left';
-  if (r === 2) return 'right';
-  if (r === 3) return 'across';
-  return 'none';
+  // Requested behavior: passing is always clockwise.
+  // Note: Seat indices are laid out as 0=bottom,1=right,2=top,3=left.
+  // Clockwise therefore means: 0 -> 3 -> 2 -> 1 -> 0 (i.e. -1 mod 4).
+  // We keep the public label as 'clockwise' to avoid confusion.
+  void round;
+  return 'clockwise';
 }
 
 // ----- Room lifecycle
@@ -357,7 +357,8 @@ function applyPlayedCard(room, seatIndex, card, fromCpu = false) {
 
   // Next turn or resolve trick
   if (trick.cards.length < 4) {
-    g.currentTurn = (seatIndex + 1) % 4;
+    // Clockwise turn order with seat layout 0=bottom,1=right,2=top,3=left.
+    g.currentTurn = (seatIndex + 3) % 4;
     broadcastRoom(room);
     sendPrivateState(room);
     maybeAutoplayCpu(room);
@@ -463,6 +464,10 @@ function applyPassIfReady(room) {
   if (!allPicked) return;
 
   const targetForSeat = (seat) => {
+    // Seat indices are laid out as 0=bottom,1=right,2=top,3=left.
+    // Clockwise passing therefore means: seat -> (seat + 3) % 4.
+    if (g.passDir === 'clockwise') return (seat + 3) % 4;
+    // Backward-compat (shouldn't happen in this build)
     if (g.passDir === 'left') return (seat + 1) % 4;
     if (g.passDir === 'right') return (seat + 3) % 4;
     if (g.passDir === 'across') return (seat + 2) % 4;
