@@ -1,6 +1,6 @@
 {
   "name": "hjerterfri-online",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Hjerterfri online (rooms + CPU seats) - github-ready",
   "main": "server.js",
   "scripts": {

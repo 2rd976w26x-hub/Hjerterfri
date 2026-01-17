@@ -1,5 +1,5 @@
 /*
-  Hjerterfri v1.2.1
+  Hjerterfri v1.2.2
   - Online rum (Socket.IO)
   - Fulde grundregler for Hjerterfri (tricks/point/2♣ starter/hearts broken)
   - Passerunde (3 kort) med cyklus: venstre, højre, overfor, ingen (repeat)
@@ -306,9 +306,35 @@ socket.on('room:update', (room) => {
   updatePassPanel();
 });
 
-socket.on('game:private', (ps) => {
+// Server emits per-player state as 'game:privateState'
+socket.on('game:privateState', (ps) => {
   if (!myRoom || ps.code !== myRoom) return;
-  privateState = ps;
+
+  // Normalize server payload into the shape the UI expects.
+  // Server provides: { hand, legalCardKeys, passPickKeys, mustPickPass }
+  const hand = ps.hand || [];
+  const legalKeys = new Set(ps.legalCardKeys || []);
+  const legalMoves = hand.filter(c => legalKeys.has(`${c.suit}${c.value}`));
+
+  privateState = {
+    code: ps.code,
+    seatIndex: ps.seatIndex,
+    hand,
+    legalMoves,
+    legalCardKeys: [...legalKeys],
+    pass: {
+      needCount: 3,
+      // Consider "sent" when 3 cards are already picked during passing.
+      sent: Array.isArray(ps.passPickKeys) && ps.passPickKeys.length === 3,
+      pickKeys: ps.passPickKeys || []
+    }
+  };
+
+  // Restore selected cards (so UI highlights what you already chose)
+  if (publicState?.game?.phase === 'passing') {
+    selectedPass = new Set(privateState.pass.pickKeys);
+  }
+
   renderHand();
   updatePassPanel();
 });
@@ -350,8 +376,8 @@ elBtnLeave.addEventListener('click', () => {
 
 elPassBtn.addEventListener('click', () => {
   if (!myRoom) return;
-  const cards = [...selectedPass].map(k => ({ suit: k[0], value: k.slice(1) }));
-  socket.emit('game:pass', { code: myRoom, cards });
+  const picks = [...selectedPass].map(k => ({ suit: k[0], value: k.slice(1) }));
+  socket.emit('game:passSelect', { code: myRoom, picks });
 });
 
 // Start in lobby

@@ -1,4 +1,4 @@
-# Hjerterfri v1.2.0 (Online rum)
+# Hjerterfri v1.2.2 (Online rum)
 
 Denne version er en **spilbar online** udgave af **Hjerterfri** med:
 
@@ -19,6 +19,10 @@ Denne version er en **spilbar online** udgave af **Hjerterfri** med:
 ## Render / deploy note
 
 Node-versionen er pinned til **20.12.2 (LTS)** og der er tilføjet `.npmrc`, så deploy på Render ikke forsøger at hente pakker via interne registries.
+
+## Fix i v1.2.2
+
+- Din hånd rendres korrekt: klienten lytter nu på serverens `game:privateState` og passerunden sender `game:passSelect` (matching serverens events).
 
 På Render kan du med fordel sætte **Build Command** til:
 

@@ -1,6 +1,6 @@
 'use strict';
 
-// Hjerterfri v1.2.0
+// Hjerterfri v1.2.2
 // Online rum (Socket.IO) + fulde grundregler for Hjerterfri (tricks, point, 2♣ starter, hearts broken)
 // + simpel CPU-AI + public/private state.
 
