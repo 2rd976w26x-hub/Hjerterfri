@@ -133,16 +133,35 @@ button.primary{
 }
 .trick{
   position:relative;
-  height:160px;
+  width:300px;
+  height:300px;
   margin:0 auto 10px;
 }
+.trick::before{
+  content:"";
+  position:absolute;
+  inset:14px;
+  border-radius:999px;
+  border:2px dashed rgba(255,255,255,0.18);
+  opacity:0.75;
+}
+.trick-slot{
+  position:absolute;
+  width:86px;
+  height:120px;
+  transform:translate(-50%,-50%);
+}
+.trick-slot.north{left:50%;top:26%;}
+.trick-slot.south{left:50%;top:74%;}
+.trick-slot.west{left:26%;top:50%;}
+.trick-slot.east{left:74%;top:50%;}
 .controls{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
 
 /* Card visuals + animation */
 .playCard{
   position:absolute;
-  width:78px;
-  height:108px;
+  width:86px;
+  height:120px;
   transform:translate(-50%,-50%) scale(0.98);
   opacity:0;
   perspective:900px;
@@ -226,13 +245,14 @@ button.primary{
 .handTitle{font-weight:900;margin-bottom:8px}
 .hand{
   display:flex;
-  gap:8px;
-  flex-wrap:wrap;
+  flex-wrap:nowrap;
   justify-content:center;
+  align-items:flex-end;
+  padding:8px 0 4px;
 }
  .cardBtn,.handCard{
-  width:72px;
-  height:98px;
+  width:78px;
+  height:108px;
   border-radius:12px;
   border:1px solid rgba(255,255,255,0.35);
   background:rgba(255,255,255,0.92);
@@ -247,7 +267,16 @@ button.primary{
   user-select:none;
   transition:transform 120ms ease, opacity 120ms ease;
 }
+.hand .handCard,
+.hand .cardBtn{
+  margin-left:-42px;
+}
+.hand .handCard:first-child,
+.hand .cardBtn:first-child{
+  margin-left:0;
+}
 .cardBtn:hover,.handCard:hover{transform:translateY(-3px)}
+.handCard:hover,.cardBtn:hover{z-index:20;transform:translateY(-10px) scale(1.03)}
 .cardBtn .suit,.handCard .suit{font-size:28px;line-height:1}
 .cardBtn .val,.handCard .val{font-size:18px}
 .cardBtn.illegal{opacity:0.35;cursor:not-allowed}

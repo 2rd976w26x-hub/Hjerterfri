@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hjerterfri v1.2.4 (Online rum)</title>
+  <title>Hjerterfri v1.3.0 (Online rum)</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">🃏 Hjerterfri <span class="ver">v1.2.3</span></div>
+    <div class="brand">🃏 Hjerterfri <span class="ver">v1.3.0</span></div>
     <div id="conn" class="conn">Forbinder…</div>
   </header>
 
@@ -85,7 +85,12 @@
         </div>
 
         <div id="center" class="center">
-          <div id="trick" class="trick"></div>
+          <div id="trick" class="trick" aria-label="Stik (kort på bordet)">
+            <div id="slot2" class="trick-slot north" aria-label="CPU 2 kort-slot"></div>
+            <div id="slot1" class="trick-slot east" aria-label="CPU 1 kort-slot"></div>
+            <div id="slot0" class="trick-slot south" aria-label="Dit kort-slot"></div>
+            <div id="slot3" class="trick-slot west" aria-label="CPU 3 kort-slot"></div>
+          </div>
           <div id="passPanel" class="controls hidden">
             <div class="passInfo" id="passInfo">Vælg 3 kort at give videre.</div>
             <button id="btnPass" class="primary" disabled>Send 3 kort</button>

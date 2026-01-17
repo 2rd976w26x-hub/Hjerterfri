@@ -1,4 +1,4 @@
-# Hjerterfri v1.2.4 (Online rum)
+# Hjerterfri v1.3.0 (Online rum)
 
 Denne version er en **spilbar online** udgave af **Hjerterfri** med:
 
@@ -20,9 +20,12 @@ Denne version er en **spilbar online** udgave af **Hjerterfri** med:
 
 Node-versionen er pinned til **20.12.2 (LTS)** og der er tilføjet `.npmrc`, så deploy på Render ikke forsøger at hente pakker via interne registries.
 
-## Fix i v1.2.4
+## Nyt i v1.3.0
 
-- Din hånd rendres korrekt: klienten lytter nu på serverens `game:privateState` og passerunden sender `game:passSelect` (matching serverens events).
+- **Piratwhist-lignende bordlayout**: 4 faste kort-slots omkring midten (top/højre/bund/venstre).
+- **Mere Piratwhist-agtig flyve-animation**: kort flyver fra spillerens seat til deres slot i midten (CPU flyver ind med bagsiden og flipper).
+- **Indsamling af stik**: kort samles visuelt til vinderen.
+- **Håndlayout**: mere “fan/overlap” så hånden føles som et rigtigt kortspil.
 
 På Render kan du med fordel sætte **Build Command** til:
 

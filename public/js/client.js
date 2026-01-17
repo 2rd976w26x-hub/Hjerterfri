@@ -1,10 +1,10 @@
 /*
-  Hjerterfri v1.2.4
+  Hjerterfri v1.3.0
   - Online rum (Socket.IO)
   - Fulde grundregler for Hjerterfri (tricks/point/2♣ starter/hearts broken)
   - Passerunde (3 kort) med cyklus: venstre, højre, overfor, ingen (repeat)
   - Simpel CPU-AI
-  - Rundt bord UI + kort-animationer til midten
+  - Piratwhist-lignende bordlayout (4 faste slots) + mere rolig flyve/collect animation
 */
 
 const socket = io();
@@ -94,15 +94,40 @@ function setTurnGlow(turnIndex){
   }
 }
 
-function seatPos(seatIndex){
-  // positions relative to trick box
+function _fallbackPos(seatIndex){
+  // Fallback positions relative to trick box (if DOM is missing for some reason)
   const map = {
-    0: { x: 210, y: 150 }, // bottom
-    1: { x: 332, y: 86  }, // right
-    2: { x: 210, y: 22  }, // top
-    3: { x: 88,  y: 86  }  // left
+    0: { x: 150, y: 240 }, // bottom
+    1: { x: 240, y: 150 }, // right
+    2: { x: 150, y: 60  }, // top
+    3: { x: 60,  y: 150 }  // left
   };
   return map[seatIndex] || map[0];
+}
+
+function centerInTrick(el){
+  try {
+    const tr = elTrick.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    return {
+      x: ((r.left + r.right) / 2) - tr.left,
+      y: ((r.top + r.bottom) / 2) - tr.top,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function slotPos(seatIndex){
+  const slot = document.getElementById(`slot${seatIndex}`);
+  const p = slot ? centerInTrick(slot) : null;
+  return p || _fallbackPos(seatIndex);
+}
+
+function seatOriginPos(seatIndex){
+  const seat = document.getElementById(`seat${seatIndex}`);
+  const p = seat ? centerInTrick(seat) : null;
+  return p || _fallbackPos(seatIndex);
 }
 
 function makePlayCardEl(card){
@@ -122,8 +147,8 @@ function makePlayCardEl(card){
 
 function animateCardPlay(seatIndex, card, opts = {}){
   const { startFaceUp = true } = opts;
-  const from = seatPos(seatIndex);
-  const to = { x: 210, y: 86 };
+  const from = seatOriginPos(seatIndex);
+  const to = slotPos(seatIndex);
 
   const el = makePlayCardEl(card);
   el.dataset.seat = String(seatIndex);
@@ -131,6 +156,7 @@ function animateCardPlay(seatIndex, card, opts = {}){
 
   el.style.left = `${from.x}px`;
   el.style.top = `${from.y}px`;
+  el.style.transform = 'translate(-50%,-50%) scale(0.92)';
   elTrick.appendChild(el);
 
   // Force layout
@@ -140,6 +166,7 @@ function animateCardPlay(seatIndex, card, opts = {}){
   requestAnimationFrame(() => {
     el.style.left = `${to.x}px`;
     el.style.top = `${to.y}px`;
+    el.style.transform = 'translate(-50%,-50%) scale(1)';
   });
 
   return el;
@@ -153,7 +180,7 @@ function flipCardUp(el){
 function collectTrickToWinner(winnerSeat){
   const cards = [...elTrick.querySelectorAll('.playCard')];
   if (cards.length === 0) return;
-  const to = seatPos(winnerSeat);
+  const to = seatOriginPos(winnerSeat);
   cards.forEach(c => {
     c.classList.add('collect');
     c.style.left = `${to.x}px`;
@@ -307,7 +334,12 @@ function applyPublicTrick(ps){
   // Redraw trick from room public state (fallback). Real-time updates usually come via game:cardPlayed.
   const trickObj = ps.game?.trick;
   if (!trickObj) return;
-  const plays = Array.isArray(trickObj.cards) ? trickObj.cards : [];
+  const raw = trickObj.cards;
+  const plays = Array.isArray(raw)
+    ? raw
+    : (raw && typeof raw === 'object')
+      ? Object.values(raw)
+      : [];
 
   const existing = new Map([...elTrick.querySelectorAll('.playCard')].map(el => [Number(el.dataset.seat), el]));
   const inServer = new Set(plays.map(x => Number(x.seatIndex)));
@@ -321,11 +353,13 @@ function applyPublicTrick(ps){
     if (!Number.isFinite(seat) || !play.card) continue;
     if (!existing.has(seat)) {
       const el = animateCardPlay(seat, play.card, { startFaceUp: true });
-      // no flight when syncing; snap to center positions
+      // no flight when syncing; snap directly into the correct slot
+      const p = slotPos(seat);
       el.classList.remove('fly');
-      el.style.left = '210px';
-      el.style.top = '86px';
+      el.style.left = `${p.x}px`;
+      el.style.top = `${p.y}px`;
       el.style.opacity = '1';
+      el.style.transform = 'translate(-50%,-50%) scale(1)';
     }
   }
 }
