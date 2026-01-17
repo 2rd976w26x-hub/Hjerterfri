@@ -1,5 +1,5 @@
 /*
-  Hjerterfri v1.3.0
+  Hjerterfri v1.3.1
   - Online rum (Socket.IO)
   - Fulde grundregler for Hjerterfri (tricks/point/2♣ starter/hearts broken)
   - Passerunde (3 kort) med cyklus: venstre, højre, overfor, ingen (repeat)
@@ -226,6 +226,33 @@ function renderHand(){
   elHand.innerHTML = '';
   selectedPass = selectedPass; // keep
   if (!privateState?.hand) return;
+
+  // Adjust overlap so the full hand fits on screen (Piratwhist-like):
+  // more cards => more overlap. This keeps everything visible without scrolling.
+  try {
+    const n = privateState.hand.length;
+    const cardW = 78; // must match CSS width
+    if (n <= 1) {
+      elHand.style.setProperty('--hand-shift', '0px');
+    } else {
+      const containerW = elHand.clientWidth || 0;
+      // Default overlap (-42px). Increase overlap (more negative) if it doesn't fit.
+      const defaultShift = -42;
+      const totalW = cardW + (n - 1) * (cardW + defaultShift);
+      if (containerW > 0 && totalW > containerW) {
+        // Compute shift that fits exactly.
+        let shift = (containerW - cardW) / (n - 1) - cardW;
+        // Clamp: don't overlap too much (keeps cards readable), but ensure fit.
+        if (shift < -64) shift = -64;
+        if (shift > -10) shift = -10;
+        elHand.style.setProperty('--hand-shift', `${Math.round(shift)}px`);
+      } else {
+        elHand.style.setProperty('--hand-shift', `${defaultShift}px`);
+      }
+    }
+  } catch (e) {
+    // If anything goes wrong, fall back to the CSS default.
+  }
 
   const phase = publicState?.game?.phase;
   const legal = new Set((privateState.legalMoves || []).map(c => `${c.suit}${c.value}`));

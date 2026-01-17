@@ -1,4 +1,4 @@
-# Hjerterfri v1.3.0 (Online rum)
+# Hjerterfri v1.3.1 (Online rum)
 
 Denne version er en **spilbar online** udgave af **Hjerterfri** med:
 
@@ -20,7 +20,11 @@ Denne version er en **spilbar online** udgave af **Hjerterfri** med:
 
 Node-versionen er pinned til **20.12.2 (LTS)** og der er tilføjet `.npmrc`, så deploy på Render ikke forsøger at hente pakker via interne registries.
 
-## Nyt i v1.3.0
+## Nyt i v1.3.1
+
+- Hånden auto-tilpasser overlap, så alle kort kan ses på én gang på desktop.
+
+## Tidligere (v1.3.0)
 
 - **Piratwhist-lignende bordlayout**: 4 faste kort-slots omkring midten (top/højre/bund/venstre).
 - **Mere Piratwhist-agtig flyve-animation**: kort flyver fra spillerens seat til deres slot i midten (CPU flyver ind med bagsiden og flipper).

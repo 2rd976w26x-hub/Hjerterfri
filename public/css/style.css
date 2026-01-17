@@ -249,6 +249,8 @@ button.primary{
   justify-content:center;
   align-items:flex-end;
   padding:8px 0 4px;
+  /* default overlap between cards (JS may override per hand) */
+  --hand-shift:-42px;
 }
  .cardBtn,.handCard{
   width:78px;
@@ -269,7 +271,7 @@ button.primary{
 }
 .hand .handCard,
 .hand .cardBtn{
-  margin-left:-42px;
+  margin-left:var(--hand-shift);
 }
 .hand .handCard:first-child,
 .hand .cardBtn:first-child{
