@@ -1,5 +1,5 @@
 /*
-  Hjerterfri v1.2.0
+  Hjerterfri v1.2.1
   - Online rum (Socket.IO)
   - Fulde grundregler for Hjerterfri (tricks/point/2♣ starter/hearts broken)
   - Passerunde (3 kort) med cyklus: venstre, højre, overfor, ingen (repeat)
@@ -25,8 +25,10 @@ const elSuitRows = document.getElementById('suitCounterRows');
 const elTrick = document.getElementById('trick');
 const elHand = document.getElementById('hand');
 const elPassPanel = document.getElementById('passPanel');
-const elPassBtn = document.getElementById('btnSendPass');
-const elScores = document.getElementById('scores');
+// HTML uses id="btnPass"
+const elPassBtn = document.getElementById('btnPass');
+// HTML uses id="scoreRows"
+const elScores = document.getElementById('scoreRows');
 
 // -------- Local state --------
 let myRoom = null;
@@ -211,7 +213,9 @@ function updatePassPanel(){
 
   const picked = selectedPass.size;
   const label = sent ? 'Kort sendt ✅' : `Vælg ${need} kort og send (${picked}/${need}) — passer ${passDirLabel(passDir)}`;
-  document.getElementById('passText').textContent = label;
+  // HTML uses id="passInfo"
+  const passInfoEl = document.getElementById('passInfo');
+  if (passInfoEl) passInfoEl.textContent = label;
   elPassBtn.disabled = sent || picked !== need;
 }
 
