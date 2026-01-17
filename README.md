@@ -1,4 +1,4 @@
-# Hjerterfri v1.1.1 (Online rum - demo)
+# Hjerterfri v1.1.2 (Online rum - demo)
 
 Dette er en **github-ready** demo af **Hjerterfri** med:
 
