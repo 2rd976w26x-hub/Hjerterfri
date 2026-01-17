@@ -1,5 +1,5 @@
 /*
-  Hjerterfri v1.2.3
+  Hjerterfri v1.2.4
   - Online rum (Socket.IO)
   - Fulde grundregler for Hjerterfri (tricks/point/2♣ starter/hearts broken)
   - Passerunde (3 kort) med cyklus: venstre, højre, overfor, ingen (repeat)
@@ -38,6 +38,8 @@ let publicState = null; // room public state
 let privateState = null; // per-player state (hand, legal moves, etc.)
 
 let selectedPass = new Set();
+
+let collectingUntil = 0;
 
 // -------- Helpers --------
 function escapeHtml(s){
@@ -103,18 +105,35 @@ function seatPos(seatIndex){
   return map[seatIndex] || map[0];
 }
 
-function animateCardPlay(seatIndex, card, keepOnTable = true){
+function makePlayCardEl(card){
+  const el = document.createElement('div');
+  el.className = 'playCard';
+  el.innerHTML = `
+    <div class="card3d">
+      <div class="face back"></div>
+      <div class="face front">
+        <div class="val">${escapeHtml(card.value)}</div>
+        <div class="suit">${escapeHtml(card.suit)}</div>
+      </div>
+    </div>
+  `;
+  return el;
+}
+
+function animateCardPlay(seatIndex, card, opts = {}){
+  const { startFaceUp = true } = opts;
   const from = seatPos(seatIndex);
   const to = { x: 210, y: 86 };
 
-  const el = document.createElement('div');
-  el.className = 'playCard';
+  const el = makePlayCardEl(card);
   el.dataset.seat = String(seatIndex);
-  el.innerHTML = `<div class="val">${escapeHtml(card.value)}</div><div class="suit">${escapeHtml(card.suit)}</div>`;
+  if (startFaceUp) el.classList.add('faceUp');
+
   el.style.left = `${from.x}px`;
   el.style.top = `${from.y}px`;
   elTrick.appendChild(el);
 
+  // Force layout
   void el.offsetWidth;
   el.classList.add('fly');
 
@@ -123,15 +142,34 @@ function animateCardPlay(seatIndex, card, keepOnTable = true){
     el.style.top = `${to.y}px`;
   });
 
-  if (!keepOnTable) {
-    setTimeout(() => {
-      el.style.opacity = '0';
-      setTimeout(() => el.remove(), 220);
-    }, 1100);
-  }
+  return el;
+}
+
+function flipCardUp(el){
+  if (!el) return;
+  el.classList.add('faceUp');
+}
+
+function collectTrickToWinner(winnerSeat){
+  const cards = [...elTrick.querySelectorAll('.playCard')];
+  if (cards.length === 0) return;
+  const to = seatPos(winnerSeat);
+  cards.forEach(c => {
+    c.classList.add('collect');
+    c.style.left = `${to.x}px`;
+    c.style.top = `${to.y}px`;
+    c.style.transform = 'translate(-50%,-50%) scale(0.65)';
+  });
+  setTimeout(() => {
+    cards.forEach(c => {
+      c.style.opacity = '0';
+    });
+    setTimeout(() => cards.forEach(c => c.remove()), 260);
+  }, 560);
 }
 
 function clearTrick(){
+
   // fade out old trick cards
   const cards = [...elTrick.querySelectorAll('.playCard')];
   cards.forEach(c => c.classList.add('fadeOut'));
@@ -143,7 +181,7 @@ function clearTrick(){
 function renderScores(ps){
   if (!ps?.game) return;
   const s = ps.seats;
-  const total = ps.game.totalScores;
+  const total = ps.game.totalPoints || ps.game.totalScores;
   const roundPts = ps.game.roundPoints;
   const rows = s.map((seat, i) => {
     const you = (i === mySeatIndex) ? ' (dig)' : '';
@@ -233,7 +271,7 @@ function renderPublic(ps){
     seatEl.querySelector('.seatMeta').textContent = (count != null && ps.started) ? `${meta} • ${count} kort` : meta;
   });
 
-  setTurnGlow(ps.started ? ps.currentTurn : -1);
+  setTurnGlow(ps.started ? (ps.game?.currentTurn ?? -1) : -1);
 
   const starterIsMe = (ps.startingSeatIndex === mySeatIndex);
   updateSuitCounter(ps.playedSuitCounts, ps.started && starterIsMe);
@@ -247,14 +285,14 @@ function renderPublic(ps){
 
   const phase = ps.game?.phase;
   const round = ps.game?.round ?? 1;
-  const trickNo = (ps.game?.trickIndex ?? 0) + 1;
+  const trickNo = (ps.game?.trick?.trickNo ?? 0) + 1;
   const heartsBroken = !!ps.game?.heartsBroken;
 
   if (phase === 'passing') {
     elStatus.textContent = `Runde ${round}: Passerunde (${passDirLabel(ps.game.passDir)}).`;
   } else if (phase === 'playing') {
-    const myTurn = ps.currentTurn === mySeatIndex;
-    const turnName = ps.seats[ps.currentTurn]?.name || '—';
+    const myTurn = ps.game.currentTurn === mySeatIndex;
+    const turnName = ps.seats[ps.game.currentTurn]?.name || '—';
     elStatus.textContent = `${myTurn ? 'Din tur' : `Tur: ${turnName}`} • Stik ${trickNo}/13 • Hjerter brudt: ${heartsBroken ? 'ja' : 'nej'}`;
   } else if (phase === 'roundEnd') {
     elStatus.textContent = `Runde ${round} slut. Point er opdateret. Ny runde starter automatisk.`;
@@ -265,41 +303,29 @@ function renderPublic(ps){
 }
 
 function applyPublicTrick(ps){
-  // redraw trick from server state (authoritative)
-  const trickObj = ps.game?.trick ?? null;
+  if (Date.now() < collectingUntil) return;
+  // Redraw trick from room public state (fallback). Real-time updates usually come via game:cardPlayed.
+  const trickObj = ps.game?.trick;
+  if (!trickObj) return;
+  const plays = Array.isArray(trickObj.cards) ? trickObj.cards : [];
 
-  // Server should send: { leader, cards: [{seatIndex,card}, ...], leadSuit, trickNo }
-  // Be defensive in case cards comes as an object-map or older payload formats.
-  let plays = [];
-  if (Array.isArray(trickObj)) {
-    plays = trickObj;
-  } else if (trickObj && Array.isArray(trickObj.cards)) {
-    plays = trickObj.cards;
-  } else if (trickObj && trickObj.cards && typeof trickObj.cards === 'object') {
-    plays = Object.values(trickObj.cards);
-  }
-  if (!Array.isArray(plays)) plays = [];
-
-  // Remove trick cards that aren't in server trick
   const existing = new Map([...elTrick.querySelectorAll('.playCard')].map(el => [Number(el.dataset.seat), el]));
-  const inServer = new Set(plays.map(x => Number(x.seatIndex ?? x.seat ?? x.seatId)));
+  const inServer = new Set(plays.map(x => Number(x.seatIndex)));
+
+  // remove stale
   existing.forEach((el, seatIndex) => { if (!inServer.has(seatIndex)) el.remove(); });
 
+  // add missing
   for (const play of plays) {
-    const seatIndex = Number(play.seatIndex ?? play.seat ?? play.seatId);
-    if (!existing.has(seatIndex)) {
-      animateCardPlay(seatIndex, play.card, true);
-    }
-  }
-}
-  const inServer = new Set(plays.map(x => Number(x.seatIndex ?? x.seat ?? x.playerIndex)));
-  existing.forEach((el, seatIndex) => { if (!inServer.has(seatIndex)) el.remove(); });
-
-  for (const play of plays) {
-    const seat = Number(play.seatIndex ?? play.seat ?? play.playerIndex);
-    if (!Number.isFinite(seat)) continue;
-    if (!existing.has(seat) && play.card) {
-      animateCardPlay(seat, play.card, true);
+    const seat = Number(play.seatIndex);
+    if (!Number.isFinite(seat) || !play.card) continue;
+    if (!existing.has(seat)) {
+      const el = animateCardPlay(seat, play.card, { startFaceUp: true });
+      // no flight when syncing; snap to center positions
+      el.classList.remove('fly');
+      el.style.left = '210px';
+      el.style.top = '86px';
+      el.style.opacity = '1';
     }
   }
 }
@@ -329,6 +355,39 @@ socket.on('room:update', (room) => {
   renderPublic(room);
   applyPublicTrick(room);
   updatePassPanel();
+});
+
+// Real-time card animations (server authoritative)
+socket.on('game:cardPlayed', (e) => {
+  if (!myRoom || e?.code && e.code !== myRoom) {
+    // some server builds may include code; ignore if not matching
+  }
+  const seatIndex = Number(e.seatIndex);
+  if (!Number.isFinite(seatIndex) || !e.card) return;
+
+  // CPU plays start face-down and flip when the card reaches the center.
+  const startFaceUp = (seatIndex === mySeatIndex) || !e.fromCpu;
+  const el = animateCardPlay(seatIndex, e.card, { startFaceUp });
+  if (!startFaceUp) {
+    setTimeout(() => flipCardUp(el), 520);
+  }
+
+  // Keep suit counter fresh for starter
+  if (e.playedSuitCounts && publicState && publicState.started) {
+    const starterIsMe = (publicState.startingSeatIndex === mySeatIndex);
+    updateSuitCounter(e.playedSuitCounts, starterIsMe);
+  }
+});
+
+socket.on('game:trickEnd', (e) => {
+  const winner = Number(e.winner);
+  if (!Number.isFinite(winner)) {
+    clearTrick();
+    return;
+  }
+  // Collect cards to winner seat, then clear.
+  collectingUntil = Date.now() + 900;
+  collectTrickToWinner(winner);
 });
 
 // Server emits per-player state as 'game:privateState'
