@@ -1,5 +1,5 @@
 /*
-  Hjerterfri v1.3.2
+  Hjerterfri v1.3.4
   - Online rum (Socket.IO)
   - Fulde grundregler for Hjerterfri (tricks/point/2♣ starter/hearts broken)
   - Passerunde (3 kort) med cyklus: venstre, højre, overfor, ingen (repeat)
@@ -227,6 +227,23 @@ function renderHand(){
   selectedPass = selectedPass; // keep
   if (!privateState?.hand) return;
 
+  // Sort hand by suit then value (tidy hand).
+  // Suit order: ♣ ♦ ♥ ♠
+  const suitOrder = { '♣': 0, '♦': 1, '♥': 2, '♠': 3 };
+  const rankOrder = {
+    '2': 2,  '3': 3,  '4': 4,  '5': 5,  '6': 6,  '7': 7,
+    '8': 8,  '9': 9,  '10': 10,
+    'J': 11, 'Q': 12, 'K': 13, 'A': 14
+  };
+  const sortedHand = [...privateState.hand].sort((a,b) => {
+    const sa = suitOrder[a.suit] ?? 99;
+    const sb = suitOrder[b.suit] ?? 99;
+    if (sa !== sb) return sa - sb;
+    const ra = rankOrder[a.value] ?? 99;
+    const rb = rankOrder[b.value] ?? 99;
+    return ra - rb;
+  });
+
   // Desktop hand should NOT be compact/overlapping.
   // Instead, scale card size + gap so ALL cards fit across the available width.
   // This matches the "fills the full width" feel from Piratwhist.
@@ -281,7 +298,7 @@ function renderHand(){
   const phase = publicState?.game?.phase;
   const legal = new Set((privateState.legalMoves || []).map(c => `${c.suit}${c.value}`));
 
-  privateState.hand.forEach((card) => {
+  sortedHand.forEach((card) => {
     const key = `${card.suit}${card.value}`;
     const btn = document.createElement('button');
     btn.className = 'handCard';
