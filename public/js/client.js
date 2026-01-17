@@ -1,5 +1,5 @@
 /*
-  Hjerterfri v1.3.1
+  Hjerterfri v1.3.2
   - Online rum (Socket.IO)
   - Fulde grundregler for Hjerterfri (tricks/point/2♣ starter/hearts broken)
   - Passerunde (3 kort) med cyklus: venstre, højre, overfor, ingen (repeat)
@@ -227,31 +227,55 @@ function renderHand(){
   selectedPass = selectedPass; // keep
   if (!privateState?.hand) return;
 
-  // Adjust overlap so the full hand fits on screen (Piratwhist-like):
-  // more cards => more overlap. This keeps everything visible without scrolling.
+  // Desktop hand should NOT be compact/overlapping.
+  // Instead, scale card size + gap so ALL cards fit across the available width.
+  // This matches the "fills the full width" feel from Piratwhist.
   try {
     const n = privateState.hand.length;
-    const cardW = 78; // must match CSS width
-    if (n <= 1) {
-      elHand.style.setProperty('--hand-shift', '0px');
+    const wrap = elHand.closest('.handWrap');
+    const containerW = (wrap?.clientWidth || elHand.clientWidth || 0);
+
+    // Reasonable desktop bounds
+    const maxW = 86;
+    const minW = 44;
+    const aspect = 108 / 78; // keep look consistent
+
+    const maxGap = 14;
+    const minGap = 6;
+    const preferredGap = 10;
+
+    if (n <= 0 || containerW <= 0) {
+      // fall back to CSS defaults
+    } else if (n === 1) {
+      elHand.style.setProperty('--hand-card-w', `${maxW}px`);
+      elHand.style.setProperty('--hand-card-h', `${Math.round(maxW * aspect)}px`);
+      elHand.style.setProperty('--hand-gap', `0px`);
     } else {
-      const containerW = elHand.clientWidth || 0;
-      // Default overlap (-42px). Increase overlap (more negative) if it doesn't fit.
-      const defaultShift = -42;
-      const totalW = cardW + (n - 1) * (cardW + defaultShift);
-      if (containerW > 0 && totalW > containerW) {
-        // Compute shift that fits exactly.
-        let shift = (containerW - cardW) / (n - 1) - cardW;
-        // Clamp: don't overlap too much (keeps cards readable), but ensure fit.
-        if (shift < -64) shift = -64;
-        if (shift > -10) shift = -10;
-        elHand.style.setProperty('--hand-shift', `${Math.round(shift)}px`);
-      } else {
-        elHand.style.setProperty('--hand-shift', `${defaultShift}px`);
+      // Available width for cards + gaps inside the wrap. Leave a little breathing room.
+      const padding = 8; // approximate inner padding
+      const avail = Math.max(0, containerW - padding * 2);
+
+      // First compute width from preferred gap.
+      let w = Math.floor((avail - preferredGap * (n - 1)) / n);
+      w = Math.max(minW, Math.min(maxW, w));
+
+      // Then compute the gap that uses the space nicely.
+      let gap = Math.floor((avail - w * n) / (n - 1));
+      gap = Math.max(minGap, Math.min(maxGap, gap));
+
+      // If gap clamping caused overflow, shrink cards a bit more.
+      const needed = w * n + gap * (n - 1);
+      if (needed > avail) {
+        const w2 = Math.floor((avail - gap * (n - 1)) / n);
+        w = Math.max(minW, Math.min(w, w2));
       }
+
+      elHand.style.setProperty('--hand-card-w', `${w}px`);
+      elHand.style.setProperty('--hand-card-h', `${Math.round(w * aspect)}px`);
+      elHand.style.setProperty('--hand-gap', `${gap}px`);
     }
   } catch (e) {
-    // If anything goes wrong, fall back to the CSS default.
+    // fall back to CSS defaults
   }
 
   const phase = publicState?.game?.phase;
@@ -523,6 +547,16 @@ elPassBtn.addEventListener('click', () => {
   if (!myRoom) return;
   const picks = [...selectedPass].map(k => ({ suit: k[0], value: k.slice(1) }));
   socket.emit('game:passSelect', { code: myRoom, picks });
+});
+
+// Keep the hand nicely spread across the full width on desktop when the window is resized.
+let _handResizeTimer = null;
+window.addEventListener('resize', () => {
+  if (!privateState?.hand) return;
+  clearTimeout(_handResizeTimer);
+  _handResizeTimer = setTimeout(() => {
+    renderHand();
+  }, 80);
 });
 
 // Start in lobby

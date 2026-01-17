@@ -246,15 +246,19 @@ button.primary{
 .hand{
   display:flex;
   flex-wrap:nowrap;
-  justify-content:center;
+  /* On desktop the hand should span the full width (Piratwhist-like) */
+  justify-content:space-between;
   align-items:flex-end;
   padding:8px 0 4px;
-  /* default overlap between cards (JS may override per hand) */
-  --hand-shift:-42px;
+  /* JS sets card size + spacing so all cards fit without overlap */
+  --hand-gap: 10px;
+  --hand-card-w: 78px;
+  --hand-card-h: 108px;
+  gap: var(--hand-gap);
 }
  .cardBtn,.handCard{
-  width:78px;
-  height:108px;
+  width:var(--hand-card-w);
+  height:var(--hand-card-h);
   border-radius:12px;
   border:1px solid rgba(255,255,255,0.35);
   background:rgba(255,255,255,0.92);
@@ -268,14 +272,6 @@ button.primary{
   font-weight:900;
   user-select:none;
   transition:transform 120ms ease, opacity 120ms ease;
-}
-.hand .handCard,
-.hand .cardBtn{
-  margin-left:var(--hand-shift);
-}
-.hand .handCard:first-child,
-.hand .cardBtn:first-child{
-  margin-left:0;
 }
 .cardBtn:hover,.handCard:hover{transform:translateY(-3px)}
 .handCard:hover,.cardBtn:hover{z-index:20;transform:translateY(-10px) scale(1.03)}

@@ -1,4 +1,4 @@
-# Hjerterfri v1.3.1 (Online rum)
+# Hjerterfri v1.3.2 (Online rum)
 
 Denne version er en **spilbar online** udgave af **Hjerterfri** med:
 
@@ -20,7 +20,10 @@ Denne version er en **spilbar online** udgave af **Hjerterfri** med:
 
 Node-versionen er pinned til **20.12.2 (LTS)** og der er tilføjet `.npmrc`, så deploy på Render ikke forsøger at hente pakker via interne registries.
 
-## Nyt i v1.3.1
+## Nyt i v1.3.2
+
+- Desktop-hånden er nu **ikke overlappet**. Kortstørrelse og mellemrum skaleres automatisk,
+  så hele hånden kan ses på én gang og fylder skærmbredden (Piratwhist-stil).
 
 - Hånden auto-tilpasser overlap, så alle kort kan ses på én gang på desktop.
 
