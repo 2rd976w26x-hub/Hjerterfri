@@ -1,4 +1,4 @@
-# Hjerterfri v1.3.4 (Online rum)
+# Hjerterfri v1.3.6 (Online rum)
 
 Denne version er en **spilbar online** udgave af **Hjerterfri** med:
 
@@ -20,7 +20,15 @@ Denne version er en **spilbar online** udgave af **Hjerterfri** med:
 
 Node-versionen er pinned til **20.12.2 (LTS)** og der er tilføjet `.npmrc`, så deploy på Render ikke forsøger at hente pakker via interne registries.
 
-## Nyt i v1.3.4
+## Nyt i v1.3.6
+
+- Kortlayout matcher Piratwhist: rigtige farver (rød for ♥/♦) og SVG pips/face-cards.
+
+- Piratwhist-kortlayout (hjørner + stor pip) for både hånd og kort på bordet.
+
+## Tidligere (v1.3.4)
+
+- Hånden rykkes sammen side-om-side når du spiller et kort.
 
 - Hånden er nu **side-om-side** (ikke "space-between"), så når du spiller et kort ud, rykker resten af kortene naturligt sammen.
 

@@ -208,16 +208,17 @@ button.primary{
 }
 .playCard .front{
   transform:rotateY(180deg);
-  background:rgba(255,255,255,0.92);
-  color:#0c2a12;
+  background:transparent;
   display:flex;
-  flex-direction:column;
   align-items:center;
   justify-content:center;
-  font-weight:900;
 }
-.playCard .front .suit{font-size:30px;line-height:1}
-.playCard .front .val{font-size:20px}
+/* Ensure Piratwhist-style playingcard fills the flip face */
+.playCard .front .playingcard{
+  width:100%;
+  height:100%;
+  border-radius:10px;
+}
 
 .turnGlow{
   box-shadow:0 0 0 2px rgba(255,255,255,0.35), 0 0 24px rgba(255,255,255,0.22);
@@ -257,41 +258,112 @@ button.primary{
   --hand-card-h: 108px;
   gap: var(--hand-gap);
 }
- .cardBtn,.handCard{
-  width:var(--hand-card-w);
-  height:var(--hand-card-h);
+
+/* ===== Playing card layout (copied from Piratwhist) ===== */
+.playingcard{
+  width:56px; height:78px;
   border-radius:12px;
-  border:1px solid rgba(255,255,255,0.35);
-  background:rgba(255,255,255,0.92);
-  color:#0c2a12;
-  box-shadow:0 8px 18px rgba(0,0,0,0.32);
-  cursor:pointer;
+  border:1px solid rgba(0,0,0,.25);
+  background: rgba(255,255,255,.97);
+  color:#111;
+  position:relative;
+  overflow:hidden;
+  box-shadow: 0 6px 16px rgba(0,0,0,.25);
+}
+.playingcard.red{ color:#b00020; }
+
+.playingcard .corner{
+  position:absolute;
   display:flex;
   flex-direction:column;
   align-items:center;
-  justify-content:center;
+  gap:0px;
   font-weight:900;
+  line-height:1;
+  letter-spacing:-.2px;
   user-select:none;
-  transition:transform 120ms ease, opacity 120ms ease;
 }
-.cardBtn:hover,.handCard:hover{transform:translateY(-3px)}
-.handCard:hover,.cardBtn:hover{z-index:20;transform:translateY(-10px) scale(1.03)}
-.cardBtn .suit,.handCard .suit{font-size:28px;line-height:1}
-.cardBtn .val,.handCard .val{font-size:18px}
-.cardBtn.illegal{opacity:0.35;cursor:not-allowed}
-.cardBtn.selected{transform:translateY(-5px) scale(1.02);box-shadow:0 0 0 2px rgba(255,255,255,0.35), 0 14px 26px rgba(0,0,0,0.35)}
+.playingcard .corner.tl{ left:6px; top:6px; }
+.playingcard .corner.br{ right:6px; bottom:6px; transform: rotate(180deg); }
+.playingcard .corner .rk{ font-size:14px; }
+.playingcard .corner .st{ font-size:14px; margin-top:0px; }
 
-.handCard.illegal{opacity:0.45;cursor:not-allowed}
+.cardface-svg{
+  position:absolute;
+  left:0; top:0;
+  width:100%; height:100%;
+  pointer-events:none;
+}
+.cardface-svg .pip{
+  fill: currentColor;
+  font-weight: 900;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+}
+.cardface-svg .face-bg{
+  fill: rgba(0,0,0,.04);
+  stroke: rgba(0,0,0,.18);
+  stroke-width: 1.2;
+}
+.cardface-svg .face-line{
+  fill: rgba(0,0,0,.03);
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.cardface-svg .face-fill{
+  fill: rgba(0,0,0,.06);
+  stroke: rgba(0,0,0,.18);
+  stroke-width: 1;
+}
+.cardface-svg .face-banner{
+  fill: rgba(255,255,255,.65);
+  stroke: rgba(0,0,0,.18);
+  stroke-width: 1;
+}
+.cardface-svg .face-rank{
+  fill: currentColor;
+  font-weight: 900;
+  font-size: 14px;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+}
+
+/* Card back (butterflies image) */
+.playingcard.back{
+  background-image: url('/assets/cards/back.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.playingcard.back .corner,
+.playingcard.back .cardface-svg{ display:none !important; }
+
+/* Hand buttons are transparent; the inner .playingcard provides the visuals */
+.cardBtn, .handCard{
+  padding:0;
+  border:none;
+  background:transparent;
+  cursor:pointer;
+  user-select:none;
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+.cardBtn:disabled, .handCard.illegal{ opacity:.35; cursor:not-allowed; }
+.handCard:hover, .cardBtn:hover{ transform: translateY(-10px) scale(1.03); z-index:20; }
+
+/* Size the playing card inside the hand from the JS-controlled CSS vars */
+.hand .playingcard, #hand .playingcard{
+  width: var(--hand-card-w);
+  height: var(--hand-card-h);
+}
+
+/* Selected pass cards: lift ~10% of card height and add outline */
 .handCard.selected{
-  outline:3px solid rgba(255,255,255,0.65);
-  box-shadow:0 0 0 2px rgba(255,255,255,0.18), 0 16px 30px rgba(0,0,0,0.38);
-  /* Make selected pass-cards very obvious: lift them ~10% of their height */
   transform: translateY(calc(-0.10 * var(--hand-card-h))) scale(1.02);
-  z-index: 25;
+  z-index:25;
 }
-.handCard.selected:hover{
-  transform: translateY(calc(-0.10 * var(--hand-card-h))) scale(1.04);
+.handCard.selected .playingcard{
+  outline: 3px solid rgba(255,255,255,0.75);
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.18), 0 18px 40px rgba(0,0,0,0.45);
 }
+.handCard.selected:hover{ transform: translateY(calc(-0.10 * var(--hand-card-h))) scale(1.04); }
 
 /* Passing */
 .passInfo{margin-bottom:8px;font-weight:700}
