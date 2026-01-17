@@ -171,3 +171,56 @@ button.primary{
 .turnGlow{
   box-shadow:0 0 0 2px rgba(255,255,255,0.35), 0 0 24px rgba(255,255,255,0.22);
 }
+
+/* Score */
+.scoreRow{display:flex;justify-content:space-between;gap:10px;padding:4px 0}
+.scoreName{display:flex;align-items:center;gap:8px;min-width:0}
+.dot{width:10px;height:10px;border-radius:999px;background:rgba(255,255,255,0.35)}
+.scoreVal{font-weight:800}
+
+/* Other players card backs */
+.handCount{margin-top:8px;font-size:0.9em;opacity:0.9}
+.backs{display:flex;justify-content:center;gap:4px;flex-wrap:wrap;margin-top:8px}
+.backCard{width:22px;height:32px;border-radius:6px;border:1px solid rgba(255,255,255,0.28);background:rgba(255,255,255,0.18)}
+
+/* Player hand */
+.handWrap{
+  margin-top:14px;
+  padding:12px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(0,0,0,0.14);
+}
+.handTitle{font-weight:900;margin-bottom:8px}
+.hand{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:center;
+}
+.cardBtn{
+  width:72px;
+  height:98px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.35);
+  background:rgba(255,255,255,0.92);
+  color:#0c2a12;
+  box-shadow:0 8px 18px rgba(0,0,0,0.32);
+  cursor:pointer;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  font-weight:900;
+  user-select:none;
+  transition:transform 120ms ease, opacity 120ms ease;
+}
+.cardBtn:hover{transform:translateY(-3px)}
+.cardBtn .suit{font-size:28px;line-height:1}
+.cardBtn .val{font-size:18px}
+.cardBtn.illegal{opacity:0.35;cursor:not-allowed}
+.cardBtn.selected{transform:translateY(-5px) scale(1.02);box-shadow:0 0 0 2px rgba(255,255,255,0.35), 0 14px 26px rgba(0,0,0,0.35)}
+
+/* Passing */
+.passInfo{margin-bottom:8px;font-weight:700}
+

@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hjerterfri v1.1.4 (Online rum)</title>
+  <title>Hjerterfri v1.2.0 (Online rum)</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">🃏 Hjerterfri <span class="ver">v1.1.4</span></div>
+    <div class="brand">🃏 Hjerterfri <span class="ver">v1.2.0</span></div>
     <div id="conn" class="conn">Forbinder…</div>
   </header>
 
@@ -57,7 +57,13 @@
       <div id="suitCounter" class="panel hidden">
         <h3>Kort spillet pr. kulør</h3>
         <div id="suitCounterRows"></div>
-        <p class="muted small">Vises kun for den spiller der starter (demo: host/stol 1).</p>
+        <p class="muted small">Vises kun for den spiller der starter (2♣ starter).</p>
+      </div>
+
+      <div id="scorePanel" class="panel">
+        <h3>Score</h3>
+        <div id="scoreRows"></div>
+        <p id="roundLabel" class="muted small"></p>
       </div>
 
       <div id="table" class="table">
@@ -80,11 +86,21 @@
 
         <div id="center" class="center">
           <div id="trick" class="trick"></div>
+          <div id="passPanel" class="controls hidden">
+            <div class="passInfo" id="passInfo">Vælg 3 kort at give videre.</div>
+            <button id="btnPass" class="primary" disabled>Send 3 kort</button>
+          </div>
+
           <div class="controls">
-            <button id="btnPlay" class="primary" disabled>Spil tilfældigt kort</button>
             <button id="btnLeave">Forlad rum</button>
           </div>
         </div>
+      </div>
+
+      <div id="handWrap" class="handWrap">
+        <div class="handTitle">Din hånd</div>
+        <div id="hand" class="hand"></div>
+        <div class="muted small" id="handHint"></div>
       </div>
 
       <div id="gameMsg" class="msg"></div>

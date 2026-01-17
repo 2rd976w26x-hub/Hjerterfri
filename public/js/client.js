@@ -1,11 +1,15 @@
-/* Hjerterfri v1.1.4 - Online rum (Socket.IO)
-   NOTE: Dette er en "spilbar demo" med rum + CPU-sæder + bord-animation.
-   Selve Hjerterfri-reglerne (lovlige træk, runder, point osv.) er ikke implementeret endnu.
+/*
+  Hjerterfri v1.2.0
+  - Online rum (Socket.IO)
+  - Fulde grundregler for Hjerterfri (tricks/point/2♣ starter/hearts broken)
+  - Passerunde (3 kort) med cyklus: venstre, højre, overfor, ingen (repeat)
+  - Simpel CPU-AI
+  - Rundt bord UI + kort-animationer til midten
 */
 
 const socket = io();
 
-// UI refs
+// -------- UI refs --------
 const elConn = document.getElementById('conn');
 const elLobby = document.getElementById('lobby');
 const elGame = document.getElementById('game');
@@ -15,21 +19,25 @@ const elStatus = document.getElementById('status');
 const elRoomLabel = document.getElementById('roomLabel');
 const elBtnCreate = document.getElementById('btnCreate');
 const elBtnJoin = document.getElementById('btnJoin');
-const elBtnPlay = document.getElementById('btnPlay');
 const elBtnLeave = document.getElementById('btnLeave');
 const elSuitPanel = document.getElementById('suitCounter');
 const elSuitRows = document.getElementById('suitCounterRows');
 const elTrick = document.getElementById('trick');
+const elHand = document.getElementById('hand');
+const elPassPanel = document.getElementById('passPanel');
+const elPassBtn = document.getElementById('btnSendPass');
+const elScores = document.getElementById('scores');
 
+// -------- Local state --------
 let myRoom = null;
 let mySeatIndex = null;
 let isHost = false;
-let lastRoomState = null;
+let publicState = null; // room public state
+let privateState = null; // per-player state (hand, legal moves, etc.)
 
-// Helpers
-function msg(el, text, kind = '') {
-  el.innerHTML = text ? `<div class="${kind}">${escapeHtml(text)}</div>` : '';
-}
+let selectedPass = new Set();
+
+// -------- Helpers --------
 function escapeHtml(s){
   return String(s)
     .replaceAll('&','&amp;')
@@ -37,6 +45,10 @@ function escapeHtml(s){
     .replaceAll('>','&gt;')
     .replaceAll('"','&quot;')
     .replaceAll("'",'&#039;');
+}
+
+function msg(el, text, kind = '') {
+  el.innerHTML = text ? `<div class="${kind}">${escapeHtml(text)}</div>` : '';
 }
 
 function setView(view){
@@ -49,13 +61,14 @@ function setView(view){
   }
 }
 
-function randomCard(){
-  const suits = ['♣','♦','♥','♠'];
-  const values = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
-  return {
-    suit: suits[Math.floor(Math.random()*suits.length)],
-    value: values[Math.floor(Math.random()*values.length)]
-  };
+function passDirLabel(passDir){
+  switch(passDir){
+    case 'left': return 'Venstre';
+    case 'right': return 'Højre';
+    case 'across': return 'Overfor';
+    case 'none': return 'Ingen';
+    default: return '—';
+  }
 }
 
 function updateSuitCounter(playedSuitCounts, show){
@@ -79,83 +92,192 @@ function setTurnGlow(turnIndex){
 
 function seatPos(seatIndex){
   // positions relative to trick box
-  // bottom=0 right=1 top=2 left=3 (matches DOM)
   const map = {
-    0: { x: 210, y: 140 }, // near bottom
-    1: { x: 320, y: 80  }, // near right
-    2: { x: 210, y: 20  }, // near top
-    3: { x: 100, y: 80  }  // near left
+    0: { x: 210, y: 150 }, // bottom
+    1: { x: 332, y: 86  }, // right
+    2: { x: 210, y: 22  }, // top
+    3: { x: 88,  y: 86  }  // left
   };
   return map[seatIndex] || map[0];
 }
 
-function animateCardPlay(seatIndex, card){
+function animateCardPlay(seatIndex, card, keepOnTable = true){
   const from = seatPos(seatIndex);
-  const to = { x: 210, y: 80 }; // center
+  const to = { x: 210, y: 86 };
 
   const el = document.createElement('div');
   el.className = 'playCard';
+  el.dataset.seat = String(seatIndex);
   el.innerHTML = `<div class="val">${escapeHtml(card.value)}</div><div class="suit">${escapeHtml(card.suit)}</div>`;
   el.style.left = `${from.x}px`;
   el.style.top = `${from.y}px`;
   elTrick.appendChild(el);
 
-  // force layout
   void el.offsetWidth;
   el.classList.add('fly');
-  el.style.transform = `translate(-50%,-50%) scale(1.0)`;
 
-  // fly to center
   requestAnimationFrame(() => {
     el.style.left = `${to.x}px`;
     el.style.top = `${to.y}px`;
   });
 
-  // cleanup after a while to avoid clutter
-  setTimeout(() => {
-    el.style.opacity = '0';
-    el.style.transform = 'translate(-50%,-50%) scale(0.95)';
-    setTimeout(() => el.remove(), 260);
-  }, 2200);
-}
-
-function renderRoom(room){
-  lastRoomState = room;
-  elRoomLabel.textContent = room.code;
-
-  // Render seats
-  room.seats.forEach((s, i) => {
-    const seatEl = document.getElementById(`seat${i}`);
-    seatEl.querySelector('.seatName').textContent = s.name;
-    const meta = s.kind === 'cpu' ? '🤖 CPU' : (s.socketId ? '🧑 Human' : '⏳ Venter');
-    seatEl.querySelector('.seatMeta').textContent = meta;
-  });
-
-  setTurnGlow(room.started ? room.currentTurn : -1);
-
-  const starterIsMe = (room.startingSeatIndex === mySeatIndex);
-  updateSuitCounter(room.playedSuitCounts, room.started && starterIsMe);
-
-  // Status + play button
-  if (!room.started) {
-    const humans = room.seats.filter(s => s.kind === 'human' && s.socketId).length;
-    elStatus.textContent = `Venter på spillere… (${humans} human / ${room.seats.filter(s=>s.kind==='cpu').length} CPU)`;
-    elBtnPlay.disabled = true;
-  } else {
-    const myTurn = room.currentTurn === mySeatIndex;
-    elStatus.textContent = myTurn ? 'Det er din tur (demo): spil et tilfældigt kort.' : `Det er ${room.seats[room.currentTurn].name}s tur.`;
-    elBtnPlay.disabled = !myTurn;
+  if (!keepOnTable) {
+    setTimeout(() => {
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 220);
+    }, 1100);
   }
 }
 
-// Socket events
-socket.on('connect', () => {
-  elConn.textContent = 'Forbundet';
-});
+function clearTrick(){
+  // fade out old trick cards
+  const cards = [...elTrick.querySelectorAll('.playCard')];
+  cards.forEach(c => c.classList.add('fadeOut'));
+  setTimeout(() => {
+    cards.forEach(c => c.remove());
+  }, 260);
+}
 
-socket.on('disconnect', () => {
-  elConn.textContent = 'Ingen forbindelse';
-});
+function renderScores(ps){
+  if (!ps?.game) return;
+  const s = ps.seats;
+  const total = ps.game.totalScores;
+  const roundPts = ps.game.roundPoints;
+  const rows = s.map((seat, i) => {
+    const you = (i === mySeatIndex) ? ' (dig)' : '';
+    return `<tr><td>${escapeHtml(seat.name)}${you}</td><td>${roundPts?.[i] ?? 0}</td><td>${total?.[i] ?? 0}</td></tr>`;
+  }).join('');
+  elScores.innerHTML = `
+    <table class="scoreTable">
+      <thead><tr><th>Spiller</th><th>Runde</th><th>Total</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function renderHand(){
+  elHand.innerHTML = '';
+  selectedPass = selectedPass; // keep
+  if (!privateState?.hand) return;
+
+  const phase = publicState?.game?.phase;
+  const legal = new Set((privateState.legalMoves || []).map(c => `${c.suit}${c.value}`));
+
+  privateState.hand.forEach((card) => {
+    const key = `${card.suit}${card.value}`;
+    const btn = document.createElement('button');
+    btn.className = 'handCard';
+    btn.innerHTML = `<div class="val">${escapeHtml(card.value)}</div><div class="suit">${escapeHtml(card.suit)}</div>`;
+
+    const isLegal = legal.has(key);
+    const isSelected = selectedPass.has(key);
+
+    if (phase === 'passing') {
+      btn.classList.toggle('selected', isSelected);
+      btn.disabled = false;
+      btn.addEventListener('click', () => {
+        if (selectedPass.has(key)) selectedPass.delete(key);
+        else {
+          if (selectedPass.size >= 3) return;
+          selectedPass.add(key);
+        }
+        renderHand();
+        updatePassPanel();
+      });
+    } else {
+      btn.disabled = !isLegal;
+      btn.classList.toggle('illegal', !isLegal);
+      btn.addEventListener('click', () => {
+        if (!isLegal) return;
+        socket.emit('game:playCard', { code: myRoom, card });
+      });
+    }
+
+    elHand.appendChild(btn);
+  });
+}
+
+function updatePassPanel(){
+  const phase = publicState?.game?.phase;
+  const passDir = publicState?.game?.passDir;
+  const need = privateState?.pass?.needCount ?? 3;
+  const sent = privateState?.pass?.sent ?? false;
+
+  if (phase !== 'passing' || passDir === 'none') {
+    elPassPanel.classList.add('hidden');
+    return;
+  }
+  elPassPanel.classList.remove('hidden');
+
+  const picked = selectedPass.size;
+  const label = sent ? 'Kort sendt ✅' : `Vælg ${need} kort og send (${picked}/${need}) — passer ${passDirLabel(passDir)}`;
+  document.getElementById('passText').textContent = label;
+  elPassBtn.disabled = sent || picked !== need;
+}
+
+function renderPublic(ps){
+  publicState = ps;
+  elRoomLabel.textContent = ps.code;
+  renderScores(ps);
+
+  // seats
+  ps.seats.forEach((s, i) => {
+    const seatEl = document.getElementById(`seat${i}`);
+    seatEl.querySelector('.seatName').textContent = s.name;
+    const meta = s.kind === 'cpu' ? '🤖 CPU' : (s.socketId ? '🧑 Human' : '⏳ Venter');
+    const count = ps.game?.handCounts?.[i];
+    seatEl.querySelector('.seatMeta').textContent = (count != null && ps.started) ? `${meta} • ${count} kort` : meta;
+  });
+
+  setTurnGlow(ps.started ? ps.currentTurn : -1);
+
+  const starterIsMe = (ps.startingSeatIndex === mySeatIndex);
+  updateSuitCounter(ps.playedSuitCounts, ps.started && starterIsMe);
+
+  // status
+  if (!ps.started) {
+    const humans = ps.seats.filter(s => s.kind === 'human' && s.socketId).length;
+    elStatus.textContent = `Venter på spillere… (${humans} human / ${ps.seats.filter(s=>s.kind==='cpu').length} CPU)`;
+    return;
+  }
+
+  const phase = ps.game?.phase;
+  const round = ps.game?.round ?? 1;
+  const trickNo = (ps.game?.trickIndex ?? 0) + 1;
+  const heartsBroken = !!ps.game?.heartsBroken;
+
+  if (phase === 'passing') {
+    elStatus.textContent = `Runde ${round}: Passerunde (${passDirLabel(ps.game.passDir)}).`;
+  } else if (phase === 'playing') {
+    const myTurn = ps.currentTurn === mySeatIndex;
+    const turnName = ps.seats[ps.currentTurn]?.name || '—';
+    elStatus.textContent = `${myTurn ? 'Din tur' : `Tur: ${turnName}`} • Stik ${trickNo}/13 • Hjerter brudt: ${heartsBroken ? 'ja' : 'nej'}`;
+  } else if (phase === 'roundEnd') {
+    elStatus.textContent = `Runde ${round} slut. Point er opdateret. Ny runde starter automatisk.`;
+  } else if (phase === 'gameOver') {
+    const winner = ps.game?.winnerName || '—';
+    elStatus.textContent = `Spillet er slut! Vinder: ${winner}`;
+  }
+}
+
+function applyPublicTrick(ps){
+  // redraw trick from server state (authoritative)
+  const t = ps.game?.trick || [];
+  // Remove trick cards that aren't in server trick
+  const existing = new Map([...elTrick.querySelectorAll('.playCard')].map(el => [Number(el.dataset.seat), el]));
+  const inServer = new Set(t.map(x => x.seatIndex));
+  existing.forEach((el, seatIndex) => { if (!inServer.has(seatIndex)) el.remove(); });
+
+  for (const play of t) {
+    if (!existing.has(play.seatIndex)) {
+      animateCardPlay(play.seatIndex, play.card, true);
+    }
+  }
+}
+
+// -------- Socket events --------
+socket.on('connect', () => { elConn.textContent = 'Forbundet'; });
+socket.on('disconnect', () => { elConn.textContent = 'Ingen forbindelse'; });
 
 socket.on('room:error', (e) => {
   msg(elLobbyMsg, e?.message || 'Der skete en fejl.');
@@ -168,32 +290,34 @@ socket.on('room:joined', ({ code, seatIndex, isHost: hostFlag }) => {
   isHost = !!hostFlag;
   msg(elLobbyMsg, '');
   msg(elGameMsg, '');
+  selectedPass = new Set();
   setView('game');
   elRoomLabel.textContent = myRoom;
 });
 
 socket.on('room:update', (room) => {
   if (!myRoom || room.code !== myRoom) return;
-  renderRoom(room);
+  renderPublic(room);
+  applyPublicTrick(room);
+  updatePassPanel();
 });
 
-socket.on('game:started', ({ startingSeatIndex }) => {
-  if (!lastRoomState) return;
-  msg(elGameMsg, `Spillet er startet! Starter: ${lastRoomState.seats[startingSeatIndex]?.name || '—'}`);
+socket.on('game:private', (ps) => {
+  if (!myRoom || ps.code !== myRoom) return;
+  privateState = ps;
+  renderHand();
+  updatePassPanel();
 });
 
-socket.on('game:cardPlayed', ({ seatIndex, card, playedSuitCounts }) => {
-  if (!myRoom) return;
-  animateCardPlay(seatIndex, card);
-  // Update suit counter locally (server also sends via room:update)
-  if (lastRoomState) {
-    lastRoomState.playedSuitCounts = playedSuitCounts;
-    const starterIsMe = (lastRoomState.startingSeatIndex === mySeatIndex);
-    updateSuitCounter(playedSuitCounts, lastRoomState.started && starterIsMe);
-  }
+socket.on('game:trickCleared', () => {
+  clearTrick();
 });
 
-// UI actions
+socket.on('game:info', (e) => {
+  msg(elGameMsg, e?.message || '');
+});
+
+// -------- UI actions --------
 elBtnCreate.addEventListener('click', () => {
   const name = document.getElementById('nameCreate').value.trim() || 'Host';
   const cpuCount = Number(document.getElementById('cpuCount').value);
@@ -206,19 +330,24 @@ elBtnJoin.addEventListener('click', () => {
   socket.emit('room:join', { name, code });
 });
 
-elBtnPlay.addEventListener('click', () => {
-  if (!myRoom) return;
-  socket.emit('game:playCard', { code: myRoom, card: randomCard() });
-});
-
 elBtnLeave.addEventListener('click', () => {
   if (myRoom) socket.emit('room:leave', { code: myRoom });
   myRoom = null;
   mySeatIndex = null;
   isHost = false;
-  lastRoomState = null;
+  publicState = null;
+  privateState = null;
+  selectedPass = new Set();
   elTrick.innerHTML = '';
+  elHand.innerHTML = '';
+  elScores.innerHTML = '';
   setView('lobby');
+});
+
+elPassBtn.addEventListener('click', () => {
+  if (!myRoom) return;
+  const cards = [...selectedPass].map(k => ({ suit: k[0], value: k.slice(1) }));
+  socket.emit('game:pass', { code: myRoom, cards });
 });
 
 // Start in lobby
