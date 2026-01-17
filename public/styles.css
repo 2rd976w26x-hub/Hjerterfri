@@ -282,3 +282,41 @@ body{
   .seatBottom{bottom:210px}
   .toast{bottom:220px}
 }
+
+
+/* ===== v1.3.14 UI FIXES ===== */
+.statusBox, .logPanel, .centerPanel {
+  position: absolute;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 92vw);
+  max-height: 220px;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.12);
+  z-index: 10;
+}
+
+.boardWrap, #tableWrap {
+  position: relative;
+}
+
+.handArea {
+  position: relative;
+  z-index: 100;
+}
+
+.handCards .card,
+.handCards .playingCard {
+  position: relative;
+  z-index: 1;
+}
+
+.handCards .card.selected,
+.handCards .card.isSelected,
+.handCards .playingCard.selected,
+.handCards .playingCard.isSelected {
+  z-index: 200;
+}
