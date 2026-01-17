@@ -3,117 +3,70 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hjerterfri v1.3.11 (Online rum)</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <title>Hjerterfri Online v1.3.13</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">🃏 Hjerterfri <span class="ver">v1.3.11</span></div>
-    <div id="conn" class="conn">Forbinder…</div>
-  </header>
+  <div class="topBar">
+    <div class="brand">
+      <div class="title">Hjerterfri</div>
+      <div class="ver">v1.3.13</div>
+    </div>
+    <div class="roomControls">
+      <input id="nameInput" class="textInput" placeholder="Dit navn" maxlength="18" />
+      <input id="roomInput" class="textInput" placeholder="Room ID" maxlength="32" />
+      <button id="createBtn" class="btn">Opret</button>
+      <button id="joinBtn" class="btn">Join</button>
+      <button id="startBtn" class="btn btnPrimary" disabled>Start omgang</button>
+      <a class="rulesLink" href="rules.html" target="_blank" rel="noopener">Regler</a>
+    </div>
+  </div>
 
-  <main class="wrap">
-    <!-- LOBBY -->
-    <section id="lobby" class="card">
-      <h1>Online rum</h1>
-      <p class="muted">Opret et rum eller join et med en kode.</p>
-
-      <div class="grid2">
-        <div class="pane">
-          <h2>Opret rum</h2>
-          <label>Dit navn
-            <input id="nameCreate" maxlength="20" placeholder="Dit navn" />
-          </label>
-          <label>Computer-spillere (0–3)
-            <input id="cpuCount" type="number" min="0" max="3" value="2" />
-          </label>
-          <button id="btnCreate" class="primary">Opret rum</button>
-        </div>
-
-        <div class="pane">
-          <h2>Join rum</h2>
-          <label>Dit navn
-            <input id="nameJoin" maxlength="20" placeholder="Dit navn" />
-          </label>
-          <label>Rumkode
-            <input id="roomCode" maxlength="8" placeholder="ABCDE" style="text-transform:uppercase" />
-          </label>
-          <button id="btnJoin">Join</button>
-        </div>
+  <div class="boardWrap" id="tableWrap">
+    <div class="table">
+      <div class="seat seatTop">
+        <div class="playerTag" id="pTop">Top</div>
+        <div class="playedSlot" id="slotTop"></div>
+      </div>
+      <div class="seat seatRight">
+        <div class="playerTag" id="pRight">Højre</div>
+        <div class="playedSlot" id="slotRight"></div>
+      </div>
+      <div class="seat seatLeft">
+        <div class="playerTag" id="pLeft">Venstre</div>
+        <div class="playedSlot" id="slotLeft"></div>
+      </div>
+      <div class="seat seatBottom">
+        <div class="playerTag" id="pBottom">Bund</div>
+        <div class="playedSlot" id="slotBottom"></div>
       </div>
 
-      <div id="lobbyMsg" class="msg"></div>
-    </section>
-
-    <!-- GAME -->
-    <section id="game" class="card hidden">
-      <div class="row between">
-        <h1>Spilbord</h1>
-        <div class="pill">Rum: <span id="roomLabel">—</span></div>
+      <div class="centerPanel">
+        <div class="status" id="status">Ikke forbundet</div>
+        <div class="scores" id="scores"></div>
+        <div class="log" id="log"></div>
       </div>
 
-      <div id="status" class="status">Venter…</div>
-
-      <div id="suitCounter" class="panel hidden">
-        <h3>Kort spillet pr. kulør</h3>
-        <div id="suitCounterRows"></div>
-        <p class="muted small">Vises kun for den spiller der starter (2♣ starter).</p>
+      <div class="suitCount" id="suitCount" hidden>
+        <div class="panelTitle">Kort spillet pr. kulør</div>
+        <div class="panelBody" id="suitCountBody"></div>
       </div>
 
-      <div id="scorePanel" class="panel">
-        <h3>Score</h3>
-        <div id="scoreRows"></div>
-        <p id="roundLabel" class="muted small"></p>
-      </div>
+      <button id="send3Btn" class="send3Btn" disabled>Send 3 kort</button>
+    </div>
+  </div>
 
-      <div id="table" class="table">
-        <div id="seat0" class="seat seat-bottom">
-          <div class="seatName">—</div>
-          <div class="seatMeta"></div>
-        </div>
-        <div id="seat1" class="seat seat-right">
-          <div class="seatName">—</div>
-          <div class="seatMeta"></div>
-        </div>
-        <div id="seat2" class="seat seat-top">
-          <div class="seatName">—</div>
-          <div class="seatMeta"></div>
-        </div>
-        <div id="seat3" class="seat seat-left">
-          <div class="seatName">—</div>
-          <div class="seatMeta"></div>
-        </div>
+  <div class="handArea" id="handArea">
+    <div class="handHeader">
+      <div class="handTitle">Din hånd</div>
+      <div class="turnHint" id="turnHint"></div>
+    </div>
+    <div class="handCards" id="handCards"></div>
+  </div>
 
-        <div id="center" class="center">
-          <div id="trick" class="trick" aria-label="Stik (kort på bordet)">
-            <div id="slot2" class="trick-slot north" aria-label="CPU 2 kort-slot"></div>
-            <div id="slot1" class="trick-slot east" aria-label="CPU 1 kort-slot"></div>
-            <div id="slot0" class="trick-slot south" aria-label="Dit kort-slot"></div>
-            <div id="slot3" class="trick-slot west" aria-label="CPU 3 kort-slot"></div>
-          </div>
-          <div class="controls">
-            <button id="btnLeave">Forlad rum</button>
-          </div>
-        </div>
-
-        <!-- Passing controls (floating, bottom-left of the table) -->
-        <div id="passPanel" class="passPanel hidden" aria-label="Passerunde kontrol">
-          <div class="passInfo" id="passInfo">Vælg 3 kort at give videre.</div>
-          <button id="btnPass" class="primary" disabled>Send 3 kort</button>
-        </div>
-      </div>
-
-      <div id="handWrap" class="handWrap">
-        <div class="handTitle">Din hånd</div>
-        <div id="hand" class="hand"></div>
-        <div class="muted small" id="handHint"></div>
-      </div>
-
-      <div id="gameMsg" class="msg"></div>
-    </section>
-  </main>
+  <div class="toast" id="toast" hidden></div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="js/client.js"></script>
+  <script src="client.js"></script>
 </body>
 </html>

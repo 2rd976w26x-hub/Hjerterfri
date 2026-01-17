@@ -1,58 +1,49 @@
-'use strict';
-
-// Hjerterfri v1.3.9
-// Online rum (Socket.IO) + fulde grundregler for Hjerterfri (tricks, point, 2♣ starter, hearts broken)
-// + simpel CPU-AI + public/private state.
+/*
+  Hjerterfri Online (Hearts) - v1.3.13
+  Tech: Node.js + Express + Socket.IO
+  Principle: Server-authoritative validation.
+*/
 
 const path = require('path');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 
+const VERSION = '1.3.13';
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-/**
- * rooms[code] = {
- *   code,
- *   createdAt,
- *   hostSocketId,
- *   seats: [ { kind:'human'|'cpu', socketId?, name } ] (len 4)
- *   started: boolean,
- *   startingSeatIndex: number,
- *   playedSuitCounts: { '♠':n,'♥':n,'♦':n,'♣':n },
- *   game: {
- *     phase: 'passing'|'playing'|'roundEnd'|'gameOver',
- *     round: number,
- *     passDir: 'left'|'right'|'across'|'none',
- *     hands: Card[][],
- *     passPicks: Card[][], // length 4, arrays of 0..3
- *     trick: { leader:number, cards: ({seatIndex,card})[], leadSuit:string|null, trickNo:number },
- *     heartsBroken: boolean,
- *     currentTurn: number,
- *     roundPoints: number[],
- *     totalPoints: number[],
- *     lastTrickWinner: number|null,
- *   }
- * }
- */
+// ---------- Game model ----------
 
-const rooms = new Map();
+const SUITS = ['C', 'D', 'S', 'H']; // Clubs, Diamonds, Spades, Hearts
+const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 
-// ----- Cards & helpers
+function cardId(suit, rank) {
+  return `${rank}${suit}`;
+}
 
-const SUITS = ['♣', '♦', '♥', '♠'];
-const VALUES = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
-const VALUE_RANK = Object.fromEntries(VALUES.map((v, i) => [v, i]));
+function parseCard(id) {
+  // e.g. "QH", "10S"
+  const suit = id.slice(-1);
+  const rank = id.slice(0, -1);
+  return { suit, rank, id };
+}
+
+function rankValue(rank) {
+  // Low to high for comparisons
+  return RANKS.indexOf(rank);
+}
 
 function makeDeck() {
-  const d = [];
-  for (const s of SUITS) for (const v of VALUES) d.push({ suit: s, value: v });
-  return d;
+  const deck = [];
+  for (const s of SUITS) {
+    for (const r of RANKS) deck.push(cardId(s, r));
+  }
+  return deck;
 }
 
 function shuffle(arr) {
@@ -63,688 +54,620 @@ function shuffle(arr) {
   return arr;
 }
 
-function cardKey(c) {
-  return `${c.suit}${c.value}`;
+function pointsOfCard(id) {
+  const c = parseCard(id);
+  if (c.suit === 'H') return 1;
+  if (c.suit === 'S' && c.rank === 'Q') return 13;
+  return 0;
 }
 
-function sameCard(a, b) {
-  return a && b && a.suit === b.suit && a.value === b.value;
+function isHeartsCard(id) {
+  return parseCard(id).suit === 'H';
 }
 
-function newPlayedSuitCounts() {
-  return { '♠': 0, '♥': 0, '♦': 0, '♣': 0 };
-}
-
-function sortHand(hand) {
-  // suit order: clubs, diamonds, spades, hearts (common for readability)
-  const suitOrder = { '♣': 0, '♦': 1, '♠': 2, '♥': 3 };
-  hand.sort((a, b) => {
-    const sa = suitOrder[a.suit] ?? 9;
-    const sb = suitOrder[b.suit] ?? 9;
-    if (sa !== sb) return sa - sb;
-    return VALUE_RANK[a.value] - VALUE_RANK[b.value];
-  });
+function isQueenSpades(id) {
+  const c = parseCard(id);
+  return c.suit === 'S' && c.rank === 'Q';
 }
 
 function hasSuit(hand, suit) {
-  return hand.some(c => c.suit === suit);
+  return hand.some((id) => parseCard(id).suit === suit);
 }
 
-function onlyHearts(hand) {
-  return hand.length > 0 && hand.every(c => c.suit === '♥');
+function sortHand(hand) {
+  // Suit order: Clubs -> Diamonds -> Spades -> Hearts
+  const suitOrder = { C: 0, D: 1, S: 2, H: 3 };
+  return hand.slice().sort((a, b) => {
+    const ca = parseCard(a);
+    const cb = parseCard(b);
+    if (suitOrder[ca.suit] !== suitOrder[cb.suit]) return suitOrder[ca.suit] - suitOrder[cb.suit];
+    // Within suit: A -> 2 (as requested)
+    // We'll map A high but sort A first by custom value
+    const orderA2 = (rank) => {
+      if (rank === 'A') return 0;
+      return 1 + RANKS.indexOf(rank); // 2 becomes 1, 3 becomes 2, ...
+    };
+    return orderA2(ca.rank) - orderA2(cb.rank);
+  });
 }
 
-function pointsOfCard(card) {
-  if (card.suit === '♥') return 1;
-  if (card.suit === '♠' && card.value === 'Q') return 13;
-  return 0;
+function findTwoClubsIndex(hand) {
+  return hand.indexOf('2C');
 }
 
-function trickPoints(trickCards) {
-  return trickCards.reduce((sum, t) => sum + pointsOfCard(t.card), 0);
-}
-
-function findTwoOfClubsSeat(hands) {
-  for (let i = 0; i < 4; i++) {
-    if (hands[i].some(c => c.suit === '♣' && c.value === '2')) return i;
-  }
-  return 0;
-}
-
-function passDirectionForRound(round) {
-  // Requested behavior: passing is always clockwise.
-  // Note: Seat indices are laid out as 0=bottom,1=right,2=top,3=left.
-  // Clockwise therefore means: 0 -> 3 -> 2 -> 1 -> 0 (i.e. -1 mod 4).
-  // We keep the public label as 'clockwise' to avoid confusion.
-  void round;
-  return 'clockwise';
-}
-
-// ----- Room lifecycle
-
-function makeRoomCode() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 5; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
-  return code;
-}
-
-function ensureRoom(code) {
-  return rooms.get(code) || null;
-}
-
-function seatIndexForSocket(room, socketId) {
-  return room.seats.findIndex(s => s.kind === 'human' && s.socketId === socketId);
-}
-
-function isRoomFull(room) {
-  return room.seats.every(s => s.kind === 'cpu' || (s.kind === 'human' && s.socketId));
-}
-
-function roomPublicState(room) {
-  const g = room.game;
-  const publicGame = g ? {
-    phase: g.phase,
-    round: g.round,
-    passDir: g.passDir,
-    trick: g.trick,
-    heartsBroken: g.heartsBroken,
-    currentTurn: g.currentTurn,
-    roundPoints: g.roundPoints,
-    totalPoints: g.totalPoints,
-    lastTrickWinner: g.lastTrickWinner,
-    handCounts: g.hands ? g.hands.map(h => h.length) : [0,0,0,0]
-  } : null;
-
+function makeEmptyTrick() {
   return {
-    code: room.code,
-    createdAt: room.createdAt,
-    started: room.started,
-    hostSocketId: room.hostSocketId,
-    seats: room.seats.map(s => ({ kind: s.kind, name: s.name, socketId: s.socketId || null })),
-    startingSeatIndex: room.startingSeatIndex,
-    playedSuitCounts: room.playedSuitCounts,
-    game: publicGame
+    leadSuit: null,
+    plays: [null, null, null, null], // card ids
+    leader: 0,
+    turn: 0
+  };
+}
+
+function nextPlayer(i) {
+  return (i + 1) % 4;
+}
+
+function rotationForHandNumber(handNo) {
+  // 0 left, 1 right, 2 across, 3 none
+  const mod = handNo % 4;
+  if (mod === 0) return 'left';
+  if (mod === 1) return 'right';
+  if (mod === 2) return 'across';
+  return 'none';
+}
+
+function passTarget(fromIndex, rotation) {
+  if (rotation === 'left') return (fromIndex + 1) % 4;
+  if (rotation === 'right') return (fromIndex + 3) % 4;
+  if (rotation === 'across') return (fromIndex + 2) % 4;
+  return fromIndex;
+}
+
+function computeTrickWinner(trick) {
+  const leadSuit = trick.leadSuit;
+  let best = null;
+  let bestPlayer = null;
+  for (let p = 0; p < 4; p++) {
+    const id = trick.plays[p];
+    if (!id) continue;
+    const c = parseCard(id);
+    if (c.suit !== leadSuit) continue;
+    const v = rankValue(c.rank);
+    if (best === null || v > best) {
+      best = v;
+      bestPlayer = p;
+    }
+  }
+  return bestPlayer;
+}
+
+function trickPoints(trick) {
+  return trick.plays.reduce((sum, id) => sum + (id ? pointsOfCard(id) : 0), 0);
+}
+
+function allNull(arr) {
+  return arr.every((x) => x === null);
+}
+
+// ---------- Rooms ----------
+
+const rooms = new Map();
+
+function makeRoom(roomId) {
+  return {
+    id: roomId,
+    createdAt: Date.now(),
+    version: VERSION,
+    players: [null, null, null, null], // {id, name, type:'human'|'cpu'}
+    sockets: [null, null, null, null],
+    handNo: 0,
+    phase: 'lobby', // lobby | passing | playing | scoring
+    passRotation: 'left',
+    passSelections: [[], [], [], []],
+    hands: [[], [], [], []],
+    taken: [[], [], [], []],
+    scores: [0, 0, 0, 0],
+    heartsBroken: false,
+    trick: makeEmptyTrick(),
+    trickNo: 0,
+    lastTrickWinner: null,
+    lastHandPoints: [0, 0, 0, 0],
+    log: []
+  };
+}
+
+function publicState(room, forSeat) {
+  // Hide other players' hands (unless spectator seat is null)
+  const handsPublic = room.hands.map((h, idx) => (idx === forSeat ? h : new Array(h.length).fill('BACK')));
+  return {
+    id: room.id,
+    version: room.version,
+    phase: room.phase,
+    handNo: room.handNo,
+    passRotation: room.passRotation,
+    players: room.players,
+    scores: room.scores,
+    heartsBroken: room.heartsBroken,
+    trick: room.trick,
+    trickNo: room.trickNo,
+    lastTrickWinner: room.lastTrickWinner,
+    lastHandPoints: room.lastHandPoints,
+    hands: handsPublic,
+    passSelectionsCount: room.passSelections.map((s) => s.length),
+    log: room.log.slice(-20)
   };
 }
 
 function broadcastRoom(room) {
-  io.to(room.code).emit('room:update', roomPublicState(room));
+  for (let seat = 0; seat < 4; seat++) {
+    const sockId = room.sockets[seat];
+    if (!sockId) continue;
+    io.to(sockId).emit('state', publicState(room, seat));
+  }
+  // Also broadcast to room channel for spectators
+  io.to(room.id).emit('state_spectator', publicState(room, null));
 }
 
-function sendPrivateState(room) {
-  // send each human their own hand + legal moves (if any)
-  const g = room.game;
-  if (!g || !g.hands) return;
-
-  room.seats.forEach((seat, seatIndex) => {
-    if (seat.kind !== 'human' || !seat.socketId) return;
-    const socket = io.sockets.sockets.get(seat.socketId);
-    if (!socket) return;
-    const hand = g.hands[seatIndex];
-    const legal = g.phase === 'playing' && g.currentTurn === seatIndex
-      ? legalMovesForSeat(g, seatIndex)
-      : [];
-    const passPick = g.phase === 'passing' ? g.passPicks[seatIndex].map(cardKey) : [];
-
-    socket.emit('game:privateState', {
-      code: room.code,
-      seatIndex,
-      phase: g.phase,
-      round: g.round,
-      passDir: g.passDir,
-      hand,
-      legalCardKeys: legal.map(cardKey),
-      passPickKeys: passPick,
-      mustPickPass: g.phase === 'passing' && g.passDir !== 'none'
-    });
-  });
+function roomHasHumans(room) {
+  return room.players.some((p) => p && p.type === 'human');
 }
 
-function startRoomIfReady(room) {
-  if (room.started) return;
-  if (!isRoomFull(room)) return;
-
-  room.started = true;
-  room.playedSuitCounts = newPlayedSuitCounts();
-
-  // init game state
-  room.game = {
-    phase: 'passing',
-    round: 1,
-    passDir: passDirectionForRound(1),
-    hands: [[],[],[],[]],
-    passPicks: [[],[],[],[]],
-    trick: { leader: 0, cards: [], leadSuit: null, trickNo: 0 },
-    heartsBroken: false,
-    currentTurn: 0,
-    roundPoints: [0,0,0,0],
-    totalPoints: [0,0,0,0],
-    lastTrickWinner: null
-  };
-
-  newRound(room);
+function addLog(room, msg) {
+  room.log.push(msg);
+  if (room.log.length > 200) room.log.shift();
 }
 
-function newRound(room) {
-  const g = room.game;
-  g.phase = 'passing';
-  g.passDir = passDirectionForRound(g.round);
-  g.heartsBroken = false;
-  g.roundPoints = [0,0,0,0];
-  g.passPicks = [[],[],[],[]];
-  room.playedSuitCounts = newPlayedSuitCounts();
-
-  const deck = shuffle(makeDeck());
-  g.hands = [[],[],[],[]];
-  for (let i = 0; i < deck.length; i++) g.hands[i % 4].push(deck[i]);
-  for (const h of g.hands) sortHand(h);
-
-  const twoClubs = findTwoOfClubsSeat(g.hands);
-  room.startingSeatIndex = twoClubs;
-  g.trick = { leader: twoClubs, cards: [], leadSuit: null, trickNo: 0 };
-  g.currentTurn = twoClubs;
-
-  broadcastRoom(room);
-  sendPrivateState(room);
-
-  if (g.passDir === 'none') {
-    // skip passing
-    g.phase = 'playing';
-    broadcastRoom(room);
-    sendPrivateState(room);
-    maybeAutoplayCpu(room);
-  } else {
-    maybeAutoplayCpu(room);
+function ensureCPUs(room) {
+  for (let i = 0; i < 4; i++) {
+    if (!room.players[i]) {
+      room.players[i] = { id: `cpu-${room.id}-${i}`, name: `CPU ${i + 1}`, type: 'cpu' };
+    }
   }
 }
 
-// ----- Rules: legal moves
+function startNewHand(room) {
+  room.handNo += 1;
+  room.phase = 'passing';
+  room.passRotation = rotationForHandNumber(room.handNo - 1);
+  room.passSelections = [[], [], [], []];
+  room.heartsBroken = false;
+  room.taken = [[], [], [], []];
+  room.trick = makeEmptyTrick();
+  room.trickNo = 0;
+  room.lastTrickWinner = null;
+  room.lastHandPoints = [0, 0, 0, 0];
 
-function legalMovesForSeat(g, seatIndex) {
-  const hand = g.hands[seatIndex];
-  if (hand.length === 0) return [];
+  const deck = shuffle(makeDeck());
+  for (let i = 0; i < 4; i++) {
+    room.hands[i] = sortHand(deck.slice(i * 13, (i + 1) * 13));
+  }
 
-  // Passing phase: client handles selection; not a card-play phase
-  if (g.phase !== 'playing') return [];
+  addLog(room, `Ny omgang #${room.handNo} – passing: ${room.passRotation}`);
 
-  const trick = g.trick;
-  const isLeader = trick.cards.length === 0;
-  const isFirstTrick = trick.trickNo === 0;
-
-  if (isLeader) {
-    // First trick must start with 2♣
-    if (isFirstTrick) {
-      const twoClubs = hand.find(c => c.suit === '♣' && c.value === '2');
-      return twoClubs ? [twoClubs] : hand.slice();
+  // If rotation is none, skip passing instantly
+  if (room.passRotation === 'none') {
+    room.phase = 'playing';
+    initFirstTrick(room);
+  } else {
+    // CPUs auto-pick passing cards
+    for (let i = 0; i < 4; i++) {
+      if (room.players[i]?.type === 'cpu') {
+        room.passSelections[i] = pickPassCardsCPU(room, i);
+        addLog(room, `${room.players[i].name} valgte 3 kort til passing.`);
+      }
     }
+    checkResolvePassing(room);
+  }
+}
 
-    // Cannot lead hearts until broken, unless only hearts left
-    if (!g.heartsBroken && !onlyHearts(hand)) {
-      return hand.filter(c => c.suit !== '♥');
+function initFirstTrick(room) {
+  // Find who has 2C
+  let leader = 0;
+  for (let i = 0; i < 4; i++) {
+    if (room.hands[i].includes('2C')) {
+      leader = i;
+      break;
+    }
+  }
+  room.trick = makeEmptyTrick();
+  room.trick.leader = leader;
+  room.trick.turn = leader;
+  room.trick.leadSuit = null;
+  room.trick.plays = [null, null, null, null];
+  room.trickNo = 1;
+  addLog(room, `Første stik: ${room.players[leader]?.name || 'Spiller'} starter (har 2♣).`);
+  maybeAutoPlayCPU(room);
+}
+
+function legalMoves(room, seat) {
+  const hand = room.hands[seat];
+  const trick = room.trick;
+  const isFirstTrick = room.trickNo === 1;
+  const isLeading = allNull(trick.plays);
+
+  // Must play 2C to lead first trick
+  if (isFirstTrick && isLeading) {
+    if (hand.includes('2C')) return ['2C'];
+  }
+
+  const leadSuit = trick.leadSuit;
+  if (!isLeading && leadSuit) {
+    // must follow suit if possible
+    if (hasSuit(hand, leadSuit)) {
+      return hand.filter((id) => parseCard(id).suit === leadSuit);
+    }
+    // otherwise any card, but first trick restrictions apply
+    if (isFirstTrick) {
+      const filtered = hand.filter((id) => !isHeartsCard(id) && !isQueenSpades(id));
+      return filtered.length ? filtered : hand.slice();
     }
     return hand.slice();
   }
 
-  // Following: must follow suit if possible
-  const leadSuit = trick.leadSuit;
-  if (leadSuit && hasSuit(hand, leadSuit)) {
-    return hand.filter(c => c.suit === leadSuit);
+  // leading
+  if (!room.heartsBroken) {
+    // cannot lead hearts unless only hearts
+    const nonHearts = hand.filter((id) => !isHeartsCard(id));
+    const onlyHearts = nonHearts.length === 0;
+    if (!onlyHearts) {
+      const nonHeartLead = hand.filter((id) => !isHeartsCard(id));
+      // still must respect first trick restrictions if first trick
+      if (isFirstTrick) {
+        const filtered = nonHeartLead.filter((id) => !isQueenSpades(id));
+        return filtered.length ? filtered : nonHeartLead;
+      }
+      return nonHeartLead;
+    }
   }
 
-  // No lead suit: any card, BUT on first trick avoid point cards unless forced
+  // first trick lead also disallows hearts and QS, but 2C already forced
   if (isFirstTrick) {
-    const nonPoints = hand.filter(c => pointsOfCard(c) === 0);
-    return nonPoints.length ? nonPoints : hand.slice();
+    const filtered = hand.filter((id) => !isHeartsCard(id) && !isQueenSpades(id));
+    return filtered.length ? filtered : hand.slice();
   }
 
   return hand.slice();
 }
 
-function removeCardFromHand(hand, card) {
-  const idx = hand.findIndex(c => sameCard(c, card));
-  if (idx === -1) return false;
-  hand.splice(idx, 1);
-  return true;
-}
+function playCard(room, seat, card) {
+  if (room.phase !== 'playing') return { ok: false, err: 'Not in playing phase' };
+  if (room.trick.turn !== seat) return { ok: false, err: 'Not your turn' };
 
-function determineTrickWinner(trick) {
-  const leadSuit = trick.leadSuit;
-  let winner = trick.cards[0].seatIndex;
-  let bestRank = -1;
-  for (const t of trick.cards) {
-    if (t.card.suit !== leadSuit) continue;
-    const r = VALUE_RANK[t.card.value];
-    if (r > bestRank) {
-      bestRank = r;
-      winner = t.seatIndex;
-    }
+  const hand = room.hands[seat];
+  if (!hand.includes(card)) return { ok: false, err: 'Card not in hand' };
+
+  const legal = legalMoves(room, seat);
+  if (!legal.includes(card)) return { ok: false, err: 'Illegal move' };
+
+  // apply
+  room.hands[seat] = sortHand(hand.filter((c) => c !== card));
+
+  // set lead suit
+  if (allNull(room.trick.plays)) {
+    room.trick.leadSuit = parseCard(card).suit;
   }
-  return winner;
-}
+  room.trick.plays[seat] = card;
 
-function applyPlayedCard(room, seatIndex, card, fromCpu = false) {
-  const g = room.game;
-  if (!room.started || !g || g.phase !== 'playing') return;
-  if (seatIndex !== g.currentTurn) return;
+  // hearts broken?
+  if (isHeartsCard(card) && !room.heartsBroken) room.heartsBroken = true;
 
-  const hand = g.hands[seatIndex];
-  const legal = legalMovesForSeat(g, seatIndex);
-  if (!legal.some(c => sameCard(c, card))) return;
+  addLog(room, `${room.players[seat]?.name || 'Spiller'} spillede ${cardDisplay(card)}.`);
 
-  if (!removeCardFromHand(hand, card)) return;
-
-  // Update suit count (defensive cap)
-  room.playedSuitCounts[card.suit] = Math.min(13, (room.playedSuitCounts[card.suit] || 0) + 1);
-
-  // Update hearts broken
-  if (card.suit === '♥') g.heartsBroken = true;
-
-  // Apply to trick
-  const trick = g.trick;
-  if (trick.cards.length === 0) {
-    trick.leader = seatIndex;
-    trick.leadSuit = card.suit;
-  }
-  trick.cards.push({ seatIndex, card });
-
-  io.to(room.code).emit('game:cardPlayed', {
-    seatIndex,
-    card,
-    playedSuitCounts: room.playedSuitCounts,
-    fromCpu
-  });
-
-  // Next turn or resolve trick
-  if (trick.cards.length < 4) {
-    // Clockwise turn order with seat layout 0=bottom,1=right,2=top,3=left.
-    g.currentTurn = (seatIndex + 3) % 4;
-    broadcastRoom(room);
-    sendPrivateState(room);
-    maybeAutoplayCpu(room);
-    return;
-  }
-
-  // Resolve trick
-  const winner = determineTrickWinner(trick);
-  const pts = trickPoints(trick.cards);
-  g.roundPoints[winner] += pts;
-  g.lastTrickWinner = winner;
-
-  io.to(room.code).emit('game:trickEnd', {
-    winner,
-    points: pts,
-    roundPoints: g.roundPoints
-  });
-
-  // Next trick
-  trick.cards = [];
-  trick.leadSuit = null;
-  trick.trickNo += 1;
-  trick.leader = winner;
-  g.currentTurn = winner;
-
-  // Round end?
-  const allEmpty = g.hands.every(h => h.length === 0);
-  if (allEmpty) {
-    finalizeRound(room);
-    return;
-  }
-
-  broadcastRoom(room);
-  sendPrivateState(room);
-  maybeAutoplayCpu(room);
-}
-
-function finalizeRound(room) {
-  const g = room.game;
-  g.phase = 'roundEnd';
-
-  // Shoot the moon: if someone has 26 in round
-  const shooter = g.roundPoints.findIndex(p => p === 26);
-  if (shooter !== -1) {
-    for (let i = 0; i < 4; i++) {
-      g.totalPoints[i] += (i === shooter) ? 0 : 26;
-    }
-    io.to(room.code).emit('game:roundEnd', {
-      shootMoon: true,
-      shooter,
-      roundPoints: g.roundPoints,
-      totalPoints: g.totalPoints
-    });
+  // advance turn or resolve trick
+  if (room.trick.plays.every((x) => x !== null)) {
+    resolveTrick(room);
   } else {
-    for (let i = 0; i < 4; i++) g.totalPoints[i] += g.roundPoints[i];
-    io.to(room.code).emit('game:roundEnd', {
-      shootMoon: false,
-      shooter: null,
-      roundPoints: g.roundPoints,
-      totalPoints: g.totalPoints
-    });
+    room.trick.turn = nextPlayer(room.trick.turn);
+    maybeAutoPlayCPU(room);
   }
 
-  // Game over at 100+
-  const over = g.totalPoints.some(p => p >= 100);
-  if (over) {
-    g.phase = 'gameOver';
-    const min = Math.min(...g.totalPoints);
-    const winners = g.totalPoints.map((p, i) => ({ p, i })).filter(x => x.p === min).map(x => x.i);
-    io.to(room.code).emit('game:gameOver', {
-      totalPoints: g.totalPoints,
-      winners
-    });
-    broadcastRoom(room);
-    sendPrivateState(room);
-    return;
-  }
-
-  // Next round
-  g.round += 1;
-  broadcastRoom(room);
-  sendPrivateState(room);
-
-  // Delay before dealing the next round.
-  // Requirement: after the final card of the last trick is played, we must allow the
-  // card-fly animation to complete, then wait ~2 seconds before dealing new cards.
-  // We keep this delay server-side so clients stay in sync.
-  const NEXT_ROUND_DELAY_MS = 2600;
-  setTimeout(() => {
-    newRound(room);
-  }, NEXT_ROUND_DELAY_MS);
+  return { ok: true };
 }
 
-// ----- Passing
+function cardDisplay(id) {
+  const c = parseCard(id);
+  const suitSym = c.suit === 'C' ? '♣' : c.suit === 'D' ? '♦' : c.suit === 'S' ? '♠' : '♥';
+  return `${c.rank}${suitSym}`;
+}
 
-function applyPassIfReady(room) {
-  const g = room.game;
-  if (!g || g.phase !== 'passing') return;
-  if (g.passDir === 'none') {
-    g.phase = 'playing';
-    broadcastRoom(room);
-    sendPrivateState(room);
-    maybeAutoplayCpu(room);
+function resolveTrick(room) {
+  const winner = computeTrickWinner(room.trick);
+  const pts = trickPoints(room.trick);
+  room.lastTrickWinner = winner;
+
+  // store taken cards
+  room.taken[winner].push(...room.trick.plays);
+
+  addLog(room, `Stik vundet af ${room.players[winner]?.name || 'Spiller'} (+${pts} point i stik).`);
+
+  // next trick or scoring
+  if (room.hands[0].length === 0) {
+    // hand finished
+    finalizeHand(room);
     return;
   }
 
-  const allPicked = g.passPicks.every(p => p.length === 3);
-  if (!allPicked) return;
+  room.trick = makeEmptyTrick();
+  room.trick.leader = winner;
+  room.trick.turn = winner;
+  room.trickNo += 1;
 
-  const targetForSeat = (seat) => {
-    // Seat indices are laid out as 0=bottom,1=right,2=top,3=left.
-    // Clockwise passing therefore means: seat -> (seat + 3) % 4.
-    if (g.passDir === 'clockwise') return (seat + 3) % 4;
-    // Backward-compat (shouldn't happen in this build)
-    if (g.passDir === 'left') return (seat + 1) % 4;
-    if (g.passDir === 'right') return (seat + 3) % 4;
-    if (g.passDir === 'across') return (seat + 2) % 4;
-    return seat;
-  };
+  maybeAutoPlayCPU(room);
+}
 
-  // Remove selected cards from each hand first
-  const picked = g.passPicks.map(p => p.slice());
-  for (let seat = 0; seat < 4; seat++) {
-    for (const c of picked[seat]) {
-      removeCardFromHand(g.hands[seat], c);
+function finalizeHand(room) {
+  room.phase = 'scoring';
+
+  // count points
+  const pts = [0, 0, 0, 0];
+  for (let i = 0; i < 4; i++) {
+    pts[i] = room.taken[i].reduce((sum, id) => sum + pointsOfCard(id), 0);
+  }
+
+  // shoot the moon
+  const shooter = pts.findIndex((p) => p === 26);
+  if (shooter !== -1) {
+    addLog(room, `${room.players[shooter]?.name || 'Spiller'} skød månen! (Shoot the Moon)`);
+    for (let i = 0; i < 4; i++) {
+      if (i === shooter) pts[i] = 0;
+      else pts[i] = 26;
     }
   }
 
-  // Add to targets
-  for (let seat = 0; seat < 4; seat++) {
-    const t = targetForSeat(seat);
-    g.hands[t].push(...picked[seat]);
-  }
+  room.lastHandPoints = pts.slice();
+  for (let i = 0; i < 4; i++) room.scores[i] += pts[i];
 
-  for (const h of g.hands) sortHand(h);
+  addLog(room, `Omgang slut. Point: ${pts.map((p) => p).join(' / ')}`);
 
-  // Reset trick starter based on 2♣ holder after passing
-  const twoClubs = findTwoOfClubsSeat(g.hands);
-  room.startingSeatIndex = twoClubs;
-  g.trick = { leader: twoClubs, cards: [], leadSuit: null, trickNo: 0 };
-  g.currentTurn = twoClubs;
-
-  g.phase = 'playing';
-  broadcastRoom(room);
-  sendPrivateState(room);
-  io.to(room.code).emit('game:passDone', { startingSeatIndex: twoClubs });
-  maybeAutoplayCpu(room);
+  // Wait timings handled client-side; server just starts next hand when requested.
 }
 
-function isValidPassSelection(hand, picks) {
-  if (!Array.isArray(picks) || picks.length !== 3) return false;
-  const uniq = new Set(picks.map(cardKey));
-  if (uniq.size !== 3) return false;
-  return picks.every(c => hand.some(hc => sameCard(hc, c)));
-}
+function checkResolvePassing(room) {
+  if (room.passRotation === 'none') return;
+  const done = room.passSelections.every((sel) => sel.length === 3);
+  if (!done) return;
 
-// ----- CPU AI
-
-function cpuPickPassCards(hand) {
-  // simple: pick 3 highest point-risk cards: Q♠, A♠, K♠, high hearts, then high cards.
-  const score = (c) => {
-    let s = 0;
-    if (c.suit === '♠' && c.value === 'Q') s += 100;
-    if (c.suit === '♠' && (c.value === 'A' || c.value === 'K')) s += 40;
-    if (c.suit === '♥') s += 20 + VALUE_RANK[c.value];
-    s += VALUE_RANK[c.value] / 10;
-    return s;
-  };
-  const sorted = hand.slice().sort((a, b) => score(b) - score(a));
-  return sorted.slice(0, 3);
-}
-
-function cpuChooseCard(g, seatIndex) {
-  const legal = legalMovesForSeat(g, seatIndex);
-  if (!legal.length) return null;
-
-  const trick = g.trick;
-  const isLeader = trick.cards.length === 0;
-  const leadSuit = trick.leadSuit;
-
-  const rank = (c) => VALUE_RANK[c.value];
-
-  if (isLeader) {
-    // lead lowest non-heart when possible
-    const nonHearts = legal.filter(c => c.suit !== '♥');
-    const pool = nonHearts.length ? nonHearts : legal;
-    pool.sort((a, b) => rank(a) - rank(b));
-    // avoid leading Q♠ if possible
-    const safe = pool.find(c => !(c.suit === '♠' && c.value === 'Q'));
-    return safe || pool[0];
-  }
-
-  // following
-  // try not to win the trick: play the highest card that is still below current best, else dump lowest.
-  let currentBestRank = -1;
-  for (const t of trick.cards) {
-    if (t.card.suit !== leadSuit) continue;
-    currentBestRank = Math.max(currentBestRank, rank(t.card));
-  }
-
-  const followSuit = legal.filter(c => c.suit === leadSuit);
-  if (followSuit.length) {
-    const under = followSuit.filter(c => rank(c) < currentBestRank).sort((a, b) => rank(b) - rank(a));
-    if (under.length) return under[0];
-    // forced to potentially win: play lowest
-    followSuit.sort((a, b) => rank(a) - rank(b));
-    return followSuit[0];
-  }
-
-  // cannot follow: try dump points/high cards
-  const dumpScore = (c) => {
-    let s = 0;
-    if (c.suit === '♠' && c.value === 'Q') s += 100;
-    if (c.suit === '♥') s += 30 + rank(c);
-    if (c.suit === '♠' && (c.value === 'A' || c.value === 'K')) s += 10;
-    s += rank(c);
-    return s;
-  };
-  const sorted = legal.slice().sort((a, b) => dumpScore(b) - dumpScore(a));
-  return sorted[0];
-}
-
-function maybeAutoplayCpu(room) {
-  const g = room.game;
-  if (!room.started || !g) return;
-
-  // Passing: let CPUs choose immediately
-  if (g.phase === 'passing' && g.passDir !== 'none') {
-    for (let seat = 0; seat < 4; seat++) {
-      const s = room.seats[seat];
-      if (s.kind !== 'cpu') continue;
-      if (g.passPicks[seat].length === 3) continue;
-      const picks = cpuPickPassCards(g.hands[seat]);
-      g.passPicks[seat] = picks;
+  // Validate each selection is in hand
+  for (let i = 0; i < 4; i++) {
+    const hand = room.hands[i];
+    for (const c of room.passSelections[i]) {
+      if (!hand.includes(c)) {
+        addLog(room, `Passing fejl: ${room.players[i]?.name} valgte et kort de ikke har.`);
+        // reset their selection
+        room.passSelections[i] = [];
+        return;
+      }
     }
-    applyPassIfReady(room);
-    return;
   }
 
-  if (g.phase !== 'playing') return;
-  const seat = room.seats[g.currentTurn];
-  if (!seat || seat.kind !== 'cpu') return;
+  // Remove selected cards
+  const outgoing = room.passSelections.map((sel) => sel.slice());
+  for (let i = 0; i < 4; i++) {
+    room.hands[i] = room.hands[i].filter((c) => !outgoing[i].includes(c));
+  }
 
-  const card = cpuChooseCard(g, g.currentTurn);
-  if (!card) return;
+  // Deliver
+  const rotation = room.passRotation;
+  for (let from = 0; from < 4; from++) {
+    const to = passTarget(from, rotation);
+    room.hands[to].push(...outgoing[from]);
+  }
+
+  // Sort
+  for (let i = 0; i < 4; i++) room.hands[i] = sortHand(room.hands[i]);
+
+  room.phase = 'playing';
+  addLog(room, `Passing gennemført (${rotation}). Spillet starter.`);
+  initFirstTrick(room);
+}
+
+function pickPassCardsCPU(room, seat) {
+  // Simple: pass high spades + queen spades + high hearts; otherwise highest cards
+  const hand = room.hands[seat].slice();
+  const scored = hand
+    .map((id) => {
+      const c = parseCard(id);
+      let score = 0;
+      // Queen of spades very pass-worthy
+      if (isQueenSpades(id)) score += 1000;
+      // high spades risky
+      if (c.suit === 'S') score += 20 + rankValue(c.rank);
+      // hearts pass moderately
+      if (c.suit === 'H') score += 10 + rankValue(c.rank);
+      // high cards generally
+      score += rankValue(c.rank);
+      return { id, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  return scored.slice(0, 3).map((x) => x.id);
+}
+
+function pickPlayCPU(room, seat) {
+  const legal = legalMoves(room, seat);
+  // Avoid points if possible, otherwise play lowest legal
+  const noPoints = legal.filter((id) => pointsOfCard(id) === 0);
+  const choices = noPoints.length ? noPoints : legal;
+
+  // "Plays lowest legal" within choices
+  const byLow = choices.slice().sort((a, b) => {
+    const ca = parseCard(a);
+    const cb = parseCard(b);
+    if (ca.suit !== cb.suit) return SUITS.indexOf(ca.suit) - SUITS.indexOf(cb.suit);
+    return rankValue(ca.rank) - rankValue(cb.rank);
+  });
+
+  // If queen spades is legal and we are void in lead suit, dump it
+  const trick = room.trick;
+  const isFollowingVoid = trick.leadSuit && !hasSuit(room.hands[seat], trick.leadSuit);
+  if (isFollowingVoid && legal.includes('QS')) {
+    return 'QS';
+  }
+
+  return byLow[0];
+}
+
+function maybeAutoPlayCPU(room) {
+  // If it's a CPU's turn, play with a small delay
+  const seat = room.trick.turn;
+  if (room.phase !== 'playing') return;
+  if (room.players[seat]?.type !== 'cpu') return;
 
   setTimeout(() => {
-    applyPlayedCard(room, g.currentTurn, card, true);
-  }, 650);
+    // State may have advanced
+    if (!rooms.has(room.id)) return;
+    if (room.phase !== 'playing') return;
+    if (room.trick.turn !== seat) return;
+    const card = pickPlayCPU(room, seat);
+    playCard(room, seat, card);
+    broadcastRoom(room);
+  }, 450);
 }
 
-// ----- Socket.IO handlers
+// ---------- Socket ----------
 
 io.on('connection', (socket) => {
-  socket.on('room:create', ({ name, cpuCount }) => {
-    const playerName = (name || 'Spiller').toString().slice(0, 20);
-    const cpu = Math.max(0, Math.min(3, Number(cpuCount ?? 0)));
+  socket.emit('hello', { version: VERSION });
 
-    let code;
-    do { code = makeRoomCode(); } while (rooms.has(code));
+  socket.on('create_room', ({ roomId, name }) => {
+    const rid = (roomId || '').trim() || `room-${Math.random().toString(36).slice(2, 8)}`;
+    if (rooms.has(rid)) {
+      socket.emit('error_msg', { message: 'Room already exists' });
+      return;
+    }
+    const room = makeRoom(rid);
+    rooms.set(rid, room);
 
-    const seats = Array.from({ length: 4 }, (_, i) => {
-      if (i === 0) return { kind: 'human', socketId: socket.id, name: playerName };
-      // Open human seats first, then CPUs.
-      return { kind: i <= (3 - cpu) ? 'human' : 'cpu', socketId: null, name: i <= (3 - cpu) ? `Åben plads ${i+1}` : `CPU ${i - (3 - cpu)}` };
-    });
+    // Join seat 0
+    room.players[0] = { id: socket.id, name: (name || 'Player').trim() || 'Player', type: 'human' };
+    room.sockets[0] = socket.id;
 
-    const room = {
-      code,
-      createdAt: Date.now(),
-      hostSocketId: socket.id,
-      seats,
-      started: false,
-      startingSeatIndex: 0,
-      playedSuitCounts: newPlayedSuitCounts(),
-      game: null
-    };
+    socket.join(rid);
+    socket.emit('joined', { roomId: rid, seat: 0, version: VERSION });
+    addLog(room, `${room.players[0].name} oprettede rummet.`);
 
-    rooms.set(code, room);
-    socket.join(code);
+    ensureCPUs(room);
+    room.phase = 'lobby';
 
-    socket.emit('room:joined', { code, seatIndex: 0, isHost: true });
     broadcastRoom(room);
-    startRoomIfReady(room);
   });
 
-  socket.on('room:join', ({ code, name }) => {
-    const roomCode = (code || '').toString().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
-    const room = ensureRoom(roomCode);
+  socket.on('join_room', ({ roomId, name }) => {
+    const rid = (roomId || '').trim();
+    const room = rooms.get(rid);
     if (!room) {
-      socket.emit('room:error', { message: 'Rummet findes ikke (tjek koden).' });
-      return;
-    }
-    if (room.started) {
-      socket.emit('room:error', { message: 'Spillet er allerede startet i det rum.' });
+      socket.emit('error_msg', { message: 'Room not found' });
       return;
     }
 
-    const openIndex = room.seats.findIndex(s => s.kind === 'human' && !s.socketId);
-    if (openIndex === -1) {
-      socket.emit('room:error', { message: 'Rummet er fuldt.' });
+    // Find free seat
+    const seat = room.players.findIndex((p) => !p || p.type === 'cpu');
+    if (seat === -1) {
+      socket.emit('error_msg', { message: 'Room is full' });
       return;
     }
 
-    const playerName = (name || 'Spiller').toString().slice(0, 20);
-    room.seats[openIndex].socketId = socket.id;
-    room.seats[openIndex].name = playerName;
+    room.players[seat] = { id: socket.id, name: (name || `Player ${seat + 1}`).trim(), type: 'human' };
+    room.sockets[seat] = socket.id;
+    socket.join(rid);
 
-    socket.join(room.code);
-    socket.emit('room:joined', { code: room.code, seatIndex: openIndex, isHost: room.hostSocketId === socket.id });
+    socket.emit('joined', { roomId: rid, seat, version: VERSION });
+    addLog(room, `${room.players[seat].name} joined seat ${seat + 1}.`);
+
+    // Ensure CPUs fill remaining
+    ensureCPUs(room);
+
     broadcastRoom(room);
-    startRoomIfReady(room);
   });
 
-  socket.on('game:passSelect', ({ code, picks }) => {
-    const roomCode = (code || '').toString().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
-    const room = ensureRoom(roomCode);
-    if (!room || !room.game) return;
-    const g = room.game;
-    if (!room.started || g.phase !== 'passing' || g.passDir === 'none') return;
-
-    const seatIndex = seatIndexForSocket(room, socket.id);
-    if (seatIndex === -1) return;
-    const hand = g.hands[seatIndex];
-
-    const cards = Array.isArray(picks) ? picks.map(c => ({ suit: c.suit, value: c.value })) : [];
-    if (!isValidPassSelection(hand, cards)) return;
-
-    g.passPicks[seatIndex] = cards;
-    sendPrivateState(room);
-    broadcastRoom(room);
-    applyPassIfReady(room);
-  });
-
-  socket.on('game:playCard', ({ code, card }) => {
-    const roomCode = (code || '').toString().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
-    const room = ensureRoom(roomCode);
-    if (!room || !room.game) return;
-
-    const seatIndex = seatIndexForSocket(room, socket.id);
-    if (seatIndex === -1) return;
-
-    if (!card || typeof card.suit !== 'string' || typeof card.value !== 'string') return;
-    if (!SUITS.includes(card.suit) || !VALUES.includes(card.value)) return;
-
-    applyPlayedCard(room, seatIndex, { suit: card.suit, value: card.value });
-  });
-
-  socket.on('room:leave', ({ code }) => {
-    const roomCode = (code || '').toString().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
-    const room = ensureRoom(roomCode);
+  socket.on('start_hand', ({ roomId }) => {
+    const room = rooms.get(roomId);
     if (!room) return;
 
-    const idx = seatIndexForSocket(room, socket.id);
-    if (idx !== -1) {
-      room.seats[idx].socketId = null;
-      room.seats[idx].name = `Åben plads ${idx+1}`;
-    }
-    socket.leave(room.code);
+    // Only allow if at least one human exists
+    if (!roomHasHumans(room)) return;
 
-    if (room.hostSocketId === socket.id) {
-      io.to(room.code).emit('room:error', { message: 'Host forlod rummet. Rummet er lukket.' });
-      rooms.delete(room.code);
+    startNewHand(room);
+    broadcastRoom(room);
+  });
+
+  socket.on('pass_select', ({ roomId, seat, cards }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    if (room.phase !== 'passing') return;
+    if (room.players[seat]?.type !== 'human') return;
+    if (room.sockets[seat] !== socket.id) return;
+
+    const unique = Array.from(new Set((cards || []).slice(0, 3)));
+    if (unique.length !== 3) {
+      socket.emit('illegal', { message: 'Vælg præcis 3 forskellige kort.' });
       return;
     }
 
+    // validate in hand
+    const hand = room.hands[seat];
+    if (!unique.every((c) => hand.includes(c))) {
+      socket.emit('illegal', { message: 'Du kan kun sende kort du har på hånden.' });
+      return;
+    }
+
+    room.passSelections[seat] = unique;
+    addLog(room, `${room.players[seat].name} valgte 3 kort til passing.`);
+
+    checkResolvePassing(room);
+    broadcastRoom(room);
+  });
+
+  socket.on('play', ({ roomId, seat, card }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    if (room.players[seat]?.type !== 'human') return;
+    if (room.sockets[seat] !== socket.id) return;
+
+    const res = playCard(room, seat, card);
+    if (!res.ok) {
+      socket.emit('illegal', { message: res.err });
+      return;
+    }
+    broadcastRoom(room);
+  });
+
+  socket.on('next_hand', ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    if (room.phase !== 'scoring') return;
+
+    // Start next hand immediately (client handles its own visuals/timings)
+    startNewHand(room);
+    broadcastRoom(room);
+  });
+
+  socket.on('set_name', ({ roomId, seat, name }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    if (room.players[seat]?.type !== 'human') return;
+    if (room.sockets[seat] !== socket.id) return;
+    room.players[seat].name = (name || room.players[seat].name).trim().slice(0, 18);
     broadcastRoom(room);
   });
 
   socket.on('disconnect', () => {
+    // Remove from any room seat
     for (const room of rooms.values()) {
-      const idx = seatIndexForSocket(room, socket.id);
-      if (idx !== -1) {
-        room.seats[idx].socketId = null;
-        room.seats[idx].name = `Åben plads ${idx+1}`;
-        if (room.hostSocketId === socket.id) {
-          io.to(room.code).emit('room:error', { message: 'Host mistede forbindelsen. Rummet er lukket.' });
-          rooms.delete(room.code);
-        } else {
-          broadcastRoom(room);
-        }
+      const seat = room.sockets.findIndex((sid) => sid === socket.id);
+      if (seat !== -1) {
+        addLog(room, `${room.players[seat]?.name || 'Player'} disconnected.`);
+        room.players[seat] = { id: `cpu-${room.id}-${seat}`, name: `CPU ${seat + 1}`, type: 'cpu' };
+        room.sockets[seat] = null;
+        broadcastRoom(room);
+        break;
       }
     }
   });
 });
 
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Hjerterfri online server lytter på port ${PORT}`);
+  console.log(`Hjerterfri v${VERSION} listening on :${PORT}`);
 });
