@@ -284,7 +284,7 @@ body{
 }
 
 
-/* ===== v1.3.14 UI FIXES ===== */
+/* ===== v1.3.15 UI FIXES ===== */
 .statusBox, .logPanel, .centerPanel {
   position: absolute;
   top: 80px;
@@ -319,4 +319,67 @@ body{
 .handCards .playingCard.selected,
 .handCards .playingCard.isSelected {
   z-index: 200;
+}
+
+
+/* ===== v1.3.15 UI + Mobile Orientation ===== */
+
+/* Default: hide status/log panel. Toggle via body class */
+body.logHidden .centerPanel{display:none !important;}
+
+/* Make center panel a compact HUD when enabled (keeps table center visible) */
+.centerPanel{
+  position:absolute;
+  top:18px;
+  left:18px;
+  transform:none;
+  width:min(420px, calc(100% - 36px));
+  max-height:240px;
+  overflow:auto;
+  z-index:20;
+}
+
+/* Ensure hand and selected cards always sit above HUD panels */
+.handArea{z-index:100;}
+.handCards .card{position:relative; z-index:1;}
+.handCards .card.selected, .handCards .card.isSelected{z-index:200;}
+
+/* Log toggle button style */
+.btnGhost{
+  background: rgba(255,255,255,0.04);
+}
+
+/* Portrait mobile: show rotate hint (does NOT cover the hand) */
+.rotateHint{display:none;}
+@media (max-width: 900px) and (orientation: portrait){
+  .rotateHint{
+    display:flex;
+    position:absolute;
+    left:12px;
+    right:12px;
+    top:78px;
+    justify-content:center;
+    z-index:15;
+    pointer-events:none;
+  }
+  .rotateHintInner{
+    width:min(520px, 92vw);
+    padding:14px 14px;
+    border-radius:16px;
+    background: rgba(0,0,0,0.18);
+    border:1px solid rgba(255,255,255,0.10);
+    backdrop-filter: blur(6px);
+    text-align:center;
+  }
+  .rotateTitle{font-weight:900; font-size:16px;}
+  .rotateSub{color:rgba(232,243,238,0.85); font-size:13px; margin-top:2px;}
+  .rotateIcon{margin-top:10px; font-size:26px; opacity:0.9;}
+  .rotateIcon .phone{margin-right:8px;}
+}
+
+/* Landscape mobile: prioritize full table + single-row feel */
+@media (max-width: 900px) and (orientation: landscape){
+  body{padding-bottom: 120px;}
+  .handCards{grid-template-columns: repeat(13, minmax(48px, 1fr));}
+  .centerPanel{top:10px; left:10px; width:min(380px, calc(100% - 20px)); max-height:180px;}
 }

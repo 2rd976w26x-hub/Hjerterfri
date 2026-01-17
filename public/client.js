@@ -1,6 +1,6 @@
-/* Hjerterfri Online v1.3.14 - client */
+/* Hjerterfri Online v1.3.15 - client */
 
-const VERSION = '1.3.13';
+const VERSION = '1.3.15';
 
 const socket = io();
 
@@ -26,6 +26,26 @@ const toastEl = el('toast');
 const turnHint = el('turnHint');
 const suitCountPanel = el('suitCount');
 const suitCountBody = el('suitCountBody');
+
+const logToggleBtn = el('logToggleBtn');
+
+function setLogVisible(vis){
+  document.body.classList.toggle('logHidden', !vis);
+  if (logToggleBtn) logToggleBtn.textContent = vis ? 'Skjul status' : 'Vis status';
+  try{ localStorage.setItem('hf_log_visible', vis ? '1' : '0'); }catch(e){}
+}
+
+(function initLogToggle(){
+  let vis = false;
+  try{ vis = localStorage.getItem('hf_log_visible') === '1'; }catch(e){}
+  setLogVisible(vis);
+  if (logToggleBtn){
+    logToggleBtn.addEventListener('click', ()=>{
+      const nowVis = !document.body.classList.contains('logHidden');
+      setLogVisible(!nowVis);
+    });
+  }
+})();
 
 const slotEls = {
   0: el('slotBottom'),
