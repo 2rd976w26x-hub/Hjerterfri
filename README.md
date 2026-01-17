@@ -1,4 +1,4 @@
-# Hjerterfri v1.1.3 (Online rum - demo)
+# Hjerterfri v1.1.4 (Online rum - demo)
 
 ## Render / deploy note
 

@@ -1,4 +1,4 @@
-/* Hjerterfri v1.1.3 - Online rum (Socket.IO)
+/* Hjerterfri v1.1.4 - Online rum (Socket.IO)
    NOTE: Dette er en "spilbar demo" med rum + CPU-sæder + bord-animation.
    Selve Hjerterfri-reglerne (lovlige træk, runder, point osv.) er ikke implementeret endnu.
 */
