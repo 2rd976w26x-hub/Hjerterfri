@@ -1,5 +1,5 @@
 /*
-  Hjerterfri v1.2.2
+  Hjerterfri v1.2.3
   - Online rum (Socket.IO)
   - Fulde grundregler for Hjerterfri (tricks/point/2♣ starter/hearts broken)
   - Passerunde (3 kort) med cyklus: venstre, højre, overfor, ingen (repeat)
@@ -266,15 +266,40 @@ function renderPublic(ps){
 
 function applyPublicTrick(ps){
   // redraw trick from server state (authoritative)
-  const t = ps.game?.trick || [];
+  const trickObj = ps.game?.trick ?? null;
+
+  // Server should send: { leader, cards: [{seatIndex,card}, ...], leadSuit, trickNo }
+  // Be defensive in case cards comes as an object-map or older payload formats.
+  let plays = [];
+  if (Array.isArray(trickObj)) {
+    plays = trickObj;
+  } else if (trickObj && Array.isArray(trickObj.cards)) {
+    plays = trickObj.cards;
+  } else if (trickObj && trickObj.cards && typeof trickObj.cards === 'object') {
+    plays = Object.values(trickObj.cards);
+  }
+  if (!Array.isArray(plays)) plays = [];
+
   // Remove trick cards that aren't in server trick
   const existing = new Map([...elTrick.querySelectorAll('.playCard')].map(el => [Number(el.dataset.seat), el]));
-  const inServer = new Set(t.map(x => x.seatIndex));
+  const inServer = new Set(plays.map(x => Number(x.seatIndex ?? x.seat ?? x.seatId)));
   existing.forEach((el, seatIndex) => { if (!inServer.has(seatIndex)) el.remove(); });
 
-  for (const play of t) {
-    if (!existing.has(play.seatIndex)) {
-      animateCardPlay(play.seatIndex, play.card, true);
+  for (const play of plays) {
+    const seatIndex = Number(play.seatIndex ?? play.seat ?? play.seatId);
+    if (!existing.has(seatIndex)) {
+      animateCardPlay(seatIndex, play.card, true);
+    }
+  }
+}
+  const inServer = new Set(plays.map(x => Number(x.seatIndex ?? x.seat ?? x.playerIndex)));
+  existing.forEach((el, seatIndex) => { if (!inServer.has(seatIndex)) el.remove(); });
+
+  for (const play of plays) {
+    const seat = Number(play.seatIndex ?? play.seat ?? play.playerIndex);
+    if (!Number.isFinite(seat)) continue;
+    if (!existing.has(seat) && play.card) {
+      animateCardPlay(seat, play.card, true);
     }
   }
 }
