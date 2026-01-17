@@ -1,5 +1,5 @@
 /*
-  Hjerterfri v1.3.9
+  Hjerterfri v1.3.11
   - Online rum (Socket.IO)
   - Fulde grundregler for Hjerterfri (tricks/point/2♣ starter/hearts broken)
   - Passerunde (3 kort) med cyklus: venstre, højre, overfor, ingen (repeat)

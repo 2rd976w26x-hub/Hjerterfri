@@ -279,6 +279,19 @@ button.primary{
 /* Mobile: show the hand in 2 rows if needed (no horizontal scroll) */
 @media (max-width:800px){
   body{ overflow-x:hidden; }
+  /* Make room for the hand on small screens so it's not pushed below the fold */
+  .table{ height:52vh; min-height:360px; }
+
+  /* Keep the hand visible (no horizontal scroll, wraps to rows) */
+  .handWrap{
+    position: sticky;
+    bottom: 0;
+    z-index: 60;
+    margin-top: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    backdrop-filter: blur(6px);
+  }
+
   .hand{
     flex-wrap:wrap;
     justify-content:center;

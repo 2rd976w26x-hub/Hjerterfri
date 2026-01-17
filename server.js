@@ -442,9 +442,14 @@ function finalizeRound(room) {
   broadcastRoom(room);
   sendPrivateState(room);
 
+  // Delay before dealing the next round.
+  // Requirement: after the final card of the last trick is played, we must allow the
+  // card-fly animation to complete, then wait ~2 seconds before dealing new cards.
+  // We keep this delay server-side so clients stay in sync.
+  const NEXT_ROUND_DELAY_MS = 2600;
   setTimeout(() => {
     newRound(room);
-  }, 1200);
+  }, NEXT_ROUND_DELAY_MS);
 }
 
 // ----- Passing

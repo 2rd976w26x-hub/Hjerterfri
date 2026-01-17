@@ -1,4 +1,4 @@
-# Hjerterfri v1.3.9 (Online rum)
+# Hjerterfri v1.3.11 (Online rum)
 
 Denne version er en **spilbar online** udgave af **Hjerterfri** med:
 
@@ -20,7 +20,13 @@ Denne version er en **spilbar online** udgave af **Hjerterfri** med:
 
 Node-versionen er pinned til **20.12.2 (LTS)** og der er tilføjet `.npmrc`, så deploy på Render ikke forsøger at hente pakker via interne registries.
 
-## Nyt i v1.3.9
+## Nyt i v1.3.11
+
+- Forsinkelse ved omgangsskifte: Efter sidste kort i sidste stik er spillet, venter serveren nu, så kortet kan flyve ind og der går ~2 sekunder før næste omgang deles ud.
+
+## Tidligere
+
+### v1.3.9
 
 - Hånden sorterer nu pr. kulør (Klør, Ruder, Spar, Hjerter) og derefter i styrke **A → 2**.
 
