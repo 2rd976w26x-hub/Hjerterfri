@@ -445,3 +445,35 @@ body.logHidden .centerPanel{display:none !important;}
 .send3BtnTop{
   white-space:nowrap;
 }
+
+
+/* ===== Piratwhist-style animations (v1.3.18) ===== */
+.flyClone{
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 9999;
+  pointer-events: none;
+  will-change: transform;
+  box-shadow: 0 18px 34px rgba(0,0,0,0.35);
+}
+
+.slotHidden{
+  opacity: 0;
+}
+
+.flipIn{
+  animation: flipIn 240ms ease-out;
+  transform-origin: center center;
+}
+
+@keyframes flipIn{
+  0%   { transform: rotateY(90deg); }
+  60%  { transform: rotateY(-12deg); }
+  100% { transform: rotateY(0deg); }
+}
+
+.winnerFlash{
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.32), 0 0 18px rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08) !important;
+}

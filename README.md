@@ -1,4 +1,4 @@
-# Hjerterfri Online v1.3.17
+# Hjerterfri Online v1.3.18
 
 Browser-baseret Hjerterfri (Hearts) med Node.js + Express + Socket.IO.
 
@@ -20,13 +20,13 @@ npm start
 - Passing rotation: venstre → højre → overfor → ingen → gentag.
 - Shoot the Moon understøttes.
 
-## v1.3.17 (manual patch)
+## v1.3.18 (manual patch)
 Fixed mobile layout issue where the player hand was clipped due to overflow: hidden.
 Hand is now fixed to the bottom of the viewport and wraps into multiple rows when needed.
 
 ## Changelog
 
-### v1.3.17
+### v1.3.18
 - Status/tekstlog er som standard skjult og kan tændes/slukkes med knappen **Vis status**.
 - Mobil: I portrait vises et "Drej telefonen" hint; landscape er optimeret til spil.
 - Mobil hånd: fast i bunden og wrap til flere rækker ved behov (ingen clipping).

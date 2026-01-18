@@ -1,4 +1,4 @@
-/* Hjerterfri Online v1.3.17 - client */
+/* Hjerterfri Online v1.3.18 - client */
 
 const VERSION = '1.3.15';
 
@@ -138,6 +138,140 @@ function makeCardEl(cardId, faceUp = true) {
   return d;
 }
 
+/* ===== Piratwhist-style animations (v1.3.18) ===== */
+let lastPlays = [null, null, null, null];
+
+function rectCenter(rect){
+  return { x: rect.left + rect.width/2, y: rect.top + rect.height/2, w: rect.width, h: rect.height };
+}
+
+function createFlyClone(cardId, faceUp){
+  const elc = makeCardEl(cardId, faceUp);
+  elc.classList.add('flyClone');
+  document.body.appendChild(elc);
+  return elc;
+}
+
+function animateFly(clone, fromRect, toRect, ms=520){
+  const a = rectCenter(fromRect);
+  const b = rectCenter(toRect);
+  // Start at source
+  clone.style.left = (a.x - a.w/2) + "px";
+  clone.style.top  = (a.y - a.h/2) + "px";
+  clone.style.width  = a.w + "px";
+  clone.style.height = a.h + "px";
+  // We'll translate to destination with a slight lift (arc feel)
+  const dx = (b.x - a.x);
+  const dy = (b.y - a.y);
+  clone.style.transform = "translate(0px, 0px)";
+  clone.style.transition = "transform " + ms + "ms cubic-bezier(0.22, 1, 0.36, 1)";
+  requestAnimationFrame(() => {
+    clone.style.transform = `translate(${dx}px, ${dy}px)`;
+  });
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function flyToSlot(seat, cardId){
+  const slot = slotEls[seat];
+  if (!slot) return;
+
+  // origin: from hand card if mine, else from player tag
+  let originEl = null;
+  if (seat === mySeat){
+    originEl = handCards.querySelector(`[data-card="${cardId}"]`);
+  }
+  if (!originEl){
+    originEl = playerTagEls[seat] || slot; // fallback
+  }
+
+  const fromRect = originEl.getBoundingClientRect();
+  const toRect = slot.getBoundingClientRect();
+
+  // Hide the real card while animating
+  const real = slot.querySelector('.card');
+  if (real) {
+    real.classList.add('slotHidden');
+  }
+
+  // CPU: fly in as back then flip the real card in the slot
+  const cpuSeat = (seat !== mySeat);
+  const clone = createFlyClone(cpuSeat ? 'BACK' : cardId, !cpuSeat);
+  await animateFly(clone, fromRect, toRect, cpuSeat ? 540 : 520);
+  clone.remove();
+
+  if (real){
+    real.classList.remove('slotHidden');
+    if (cpuSeat){
+      real.classList.add('flipIn');
+      setTimeout(() => real.classList.remove('flipIn'), 260);
+    }
+  }
+}
+
+async function collectTrick(winnerSeat){
+  // 400ms pause after last card
+  await new Promise(r => setTimeout(r, 400));
+
+  const target = playerTagEls[winnerSeat] || slotEls[winnerSeat];
+  if (!target) return;
+
+  // Winner highlight
+  target.classList.add('winnerFlash');
+  setTimeout(() => target.classList.remove('winnerFlash'), 700);
+
+  const toRect = target.getBoundingClientRect();
+  const clones = [];
+
+  for (let seat=0; seat<4; seat++){
+    const slot = slotEls[seat];
+    const card = slot && slot.querySelector('.card');
+    if (!slot || !card) continue;
+    const fromRect = card.getBoundingClientRect();
+    const clone = createFlyClone(card.dataset.card || 'BACK', true);
+    clones.push([clone, fromRect]);
+    // hide original during collect
+    card.classList.add('slotHidden');
+  }
+
+  // Fly all four to winner (together)
+  await Promise.all(clones.map(([clone, fromRect]) => animateFly(clone, fromRect, toRect, 520).then(()=>clone.remove())));
+
+  // Clear originals (server will usually already have cleared, but we ensure visual cleanup)
+  for (let seat=0; seat<4; seat++){
+    const slot = slotEls[seat];
+    if (slot) slot.innerHTML = '';
+  }
+}
+
+function detectAnimations(){
+  if (!state) return;
+
+  const plays = state.trick?.plays || [null,null,null,null];
+  const prev = lastPlays.slice();
+
+  // New cards played: animate each new placement
+  for (let seat=0; seat<4; seat++){
+    if (plays[seat] && plays[seat] !== prev[seat]){
+      // Ensure slot has the real card, then animate
+      const slot = slotEls[seat];
+      if (slot){
+        slot.innerHTML = '';
+        slot.append(makeCardEl(plays[seat], true));
+      }
+      flyToSlot(seat, plays[seat]);
+    }
+  }
+
+  // Trick collected: previously full trick, now cleared
+  const prevFull = prev.every(x => x);
+  const nowEmpty = plays.every(x => !x);
+  if (prevFull && nowEmpty && typeof state.lastTrickWinner === 'number'){
+    collectTrick(state.lastTrickWinner);
+  }
+
+  lastPlays = plays.slice();
+}
+
 function clearSlots() {
   for (const k of Object.keys(slotEls)) slotEls[k].innerHTML = '';
 }
@@ -145,7 +279,7 @@ function clearSlots() {
 function renderSlots() {
   if (!state) return;
 
-  // Place cards for each seat. CPU cards are BACK for players not you.
+  // Place cards for each seat (faces visible in trick). Animations handled separately.
   for (let seat = 0; seat < 4; seat++) {
     const id = state.trick.plays[seat];
     const slot = slotEls[seat];
@@ -325,6 +459,7 @@ function updateUI() {
   renderScores();
   renderLog();
   renderSlots();
+  detectAnimations();
   renderHand();
   renderSuitCount();
 }
