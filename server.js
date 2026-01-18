@@ -1,5 +1,5 @@
 /*
-  Hjerterfri Online (Hearts) - v1.3.16
+  Hjerterfri Online (Hearts) - v1.3.17
   Tech: Node.js + Express + Socket.IO
   Principle: Server-authoritative validation.
 */

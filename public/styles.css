@@ -148,17 +148,15 @@ body{
 .panelBody{font-size:12px; color:var(--muted); display:grid; gap:4px}
 
 .send3Btn{
-  position:absolute;
-  left:16px;
-  bottom:16px;
-  height:40px;
-  padding:0 14px;
-  border-radius:14px;
+  height:34px;
+  padding:0 12px;
+  border-radius:10px;
   border:1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.06);
   color:var(--text);
   cursor:pointer;
 }
+
 .send3Btn:disabled{opacity:0.45; cursor:not-allowed}
 
 .handArea{
@@ -440,4 +438,10 @@ body.logHidden .centerPanel{display:none !important;}
 
   /* Hand: single-row grid, slightly smaller cards */
   .handCards{ grid-template-columns: repeat(13, minmax(44px, 1fr)) !important; }
+}
+
+
+/* v1.3.17: Send 3 kort button moved to top bar (left of name) */
+.send3BtnTop{
+  white-space:nowrap;
 }

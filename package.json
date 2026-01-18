@@ -1,6 +1,6 @@
 {
   "name": "hjerterfri-online",
-  "version": "1.3.16",
+  "version": "1.3.17",
   "description": "Hjerterfri (Hearts) online browser game - server authoritative",
   "main": "server.js",
   "engines": {

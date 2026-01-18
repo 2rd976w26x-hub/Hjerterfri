@@ -3,17 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hjerterfri Online v1.3.16</title>
+  <title>Hjerterfri Online v1.3.17</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body class="logHidden">
   <div class="topBar">
     <div class="brand">
       <div class="title">Hjerterfri</div>
-      <div class="ver">v1.3.16</div>
+      <div class="ver">v1.3.17</div>
     </div>
     <div class="roomControls">
-      <input id="nameInput" class="textInput" placeholder="Dit navn" maxlength="18" />
+            <button id="send3Btn" class="btn send3BtnTop" disabled>Send 3 kort</button>
+<input id="nameInput" class="textInput" placeholder="Dit navn" maxlength="18" />
       <input id="roomInput" class="textInput" placeholder="Room ID" maxlength="32" />
       <button id="createBtn" class="btn">Opret</button>
       <button id="joinBtn" class="btn">Join</button>
@@ -61,8 +62,6 @@
         <div class="panelTitle">Kort spillet pr. kulør</div>
         <div class="panelBody" id="suitCountBody"></div>
       </div>
-
-      <button id="send3Btn" class="send3Btn" disabled>Send 3 kort</button>
     </div>
   </div>
 

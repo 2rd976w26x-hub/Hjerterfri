@@ -1,4 +1,4 @@
-/* Hjerterfri Online v1.3.16 - client */
+/* Hjerterfri Online v1.3.17 - client */
 
 const VERSION = '1.3.15';
 
